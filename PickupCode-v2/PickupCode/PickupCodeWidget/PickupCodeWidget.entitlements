@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 免费 Apple ID 默认配置：不声明任何 entitlement（同主 App 说明）。
+	     升级付费账号后与主 App 一起启用 App Group，见 README 附录。 -->
+</dict>
+</plist>

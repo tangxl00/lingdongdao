@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 免费 Apple ID 默认配置：不声明任何 entitlement。
+	     免费 Apple ID 不支持 App Groups，声明了会导致真机签名失败。
+	     升级付费开发者账号后，按 README 附录《启用 App Group》章节，
+	     在主 App 与 Widget 两个 target 同时添加：
+	     <key>com.apple.security.application-groups</key>
+	     <array><string>group.com.yourteam.pickupcode</string></array> -->
+</dict>
+</plist>
