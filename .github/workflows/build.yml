@@ -1,0 +1,40 @@
+name: iOS Build (Unsigned IPA)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build unsigned ipa
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build (no code signing)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project PickupCode.xcodeproj \
+            -scheme PickupCode \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/PickupCode.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package unsigned ipa
+        run: |
+          mkdir -p build/Payload
+          cp -R "build/PickupCode.xcarchive/Products/Applications/PickupCode.app" build/Payload/
+          cd build
+          zip -qry PickupCode-unsigned.ipa Payload
+          ls -lh PickupCode-unsigned.ipa
+
+      - name: Upload unsigned ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: PickupCode-unsigned-ipa
+          path: build/PickupCode-unsigned.ipa
