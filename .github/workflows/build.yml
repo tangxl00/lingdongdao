@@ -17,7 +17,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild archive \
-            -project PickupCode.xcodeproj \
+           -project PickupCode-v2/PickupCode/PickupCode.xcodeproj \
             -scheme PickupCode \
             -destination 'generic/platform=iOS' \
             -archivePath build/PickupCode.xcarchive \
