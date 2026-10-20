@@ -100,7 +100,7 @@ struct HistoryView: View {
                 Button {
                     history.markCompleted(code: record.code)
                     Task {
-                        try? await LiveActivityManager.shared.endActivity(code: record.code)
+                        try? await LiveActivityManager.shared.endActivity(forCode: record.code)
                     }
                 } label: {
                     Label("已取件", systemImage: "checkmark.circle.fill")
