@@ -8,7 +8,7 @@ final class LiveActivityManager {
 
     static let shared = LiveActivityManager()
 
-    private static let logger = Logger(subsystem: "com.yourteam.pickupcode", category: "LiveActivity")
+    private let logger = Logger(subsystem: "com.yourteam.pickupcode", category: "LiveActivity")
 
     /// App 进程存活期间的超时兜底任务（按取件码索引）
     private var timeoutTasks: [String: Task<Void, Never>] = [:]
@@ -49,14 +49,14 @@ final class LiveActivityManager {
     /// 更新当前全部 Activity 的 ContentState（如倒计时刷新、过期状态变更）。
     func updateActivity(state: PickupCodeAttributes.ContentState) async {
         for activity in activeActivities {
-            await activity.update(using: ActivityContent(state: state, staleDate: nil))
+            await activity.update(using: state)
         }
     }
 
     /// 更新指定取件码的 Activity。
     func updateActivity(forCode code: String, state: PickupCodeAttributes.ContentState) async {
         for activity in activeActivities where activity.attributes.code == code {
-            await activity.update(using: ActivityContent(state: state, staleDate: nil))
+            await activity.update(using: state)
         }
     }
 
@@ -87,7 +87,7 @@ final class LiveActivityManager {
                 isExpiringSoon: PickupCodeDate.isExpiringSoon(expiryDate),
                 isCompleted: false
             )
-            await activity.update(using: ActivityContent(state: state, staleDate: nil))
+            await activity.update(using: state)
         }
     }
 

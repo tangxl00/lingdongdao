@@ -159,7 +159,7 @@ struct ContentView: View {
         if let doneCode = URLSchemeHandler.parseDoneCode(url) {
             history.markCompleted(code: doneCode)
             Task {
-                try? await LiveActivityManager.shared.endActivity(code: doneCode)
+                try? await LiveActivityManager.shared.endActivity(forCode: doneCode)
             }
             return
         }
@@ -199,7 +199,7 @@ struct ContentView: View {
     private func markCompleted(_ record: PickupCode) {
         history.markCompleted(code: record.code)
         Task {
-            try? await LiveActivityManager.shared.endActivity(code: record.code)
+            try? await LiveActivityManager.shared.endActivity(forCode: record.code)
         }
     }
 }
