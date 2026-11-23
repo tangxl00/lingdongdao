@@ -167,8 +167,18 @@ floaty://add?text=<原始文本>&source=<sms|mail|notification|clipboard>
 | 分类 | Intent |
 | --- | --- |
 | 添加 | `ComposeAttentionIntent(kind)`、`AddPickupCodeIntent`、`AddTodoIntent`、`AddTrainTicketIntent`、`AddFlightTicketIntent`、`ComposePickerIntent` |
-| 识别 | `RecognizeTextIntent(text, shortcutID, shortcutVersion, mode)`、`RecognizeTextListIntent(texts[], …)` |
-| 看板 | `ShowLockScreenBoardIntent(kinds, filter)`、`HideLockScreenBoardIntent(kinds)`、`DismissBoardIntent`、`PageHomeBoardListIntent(delta)`、`FocusHomeBoardIntent(delta)`、`FocusAttentionIntent(delta)`、`ComposeControlIntent(show)` |
+| 识别 | `RecognizeTextIntent(text, shortcutID, shortcutVersion, mode)`、`RecognizeTextListIntent(texts, …)` |
+| 看板 | `ShowLockScreenBoardIntent(kinds, filter)`、`HideLockScreenBoardIntent(kinds)`、`DismissBoardIntent`、`PageHomeBoardListIntent(delta)`、`FocusHomeBoardIntent(delta)`、`FocusAttentionIntent(delta)`、`ComposeControlIntent(mode)` |
+
+> **参数形态说明（AppIntents 不支持集合参数）**
+>
+> | 参数 | 实际类型 | 说明 |
+> | --- | --- | --- |
+> | `kinds` | `String` | 逗号 / 空格分隔的类型串，如 `pickup,todo`；留空 = 全部类型 |
+> | `texts` | `String` | 多行文本，每行一段（`---` 视为空行忽略） |
+> | `mode`（看板开关） | `BoardDisplayMode` | `toggle` / `show` / `hide` 三选一 |
+> | `delta` | `Int` | 翻页 / 聚焦步长，默认 `1` |
+> | `itemID` / `entryID` | `String` | 内容 UUID 字符串 |
 | 完成 | `CompleteAttentionIntent`、`CompleteBoardItemIntent(itemID)`、`CompletePickupLineIntent(itemID)`、`CheckChecklistLineIntent(entryID, itemID)`、`CheckBoardChecklistLineIntent(entryID, itemID)` |
 
 App 快捷指令短语（`FloatyShortcuts`）：添加取件码 / 添加待办 / 添加火车票 / 添加机票 / 识别文本。

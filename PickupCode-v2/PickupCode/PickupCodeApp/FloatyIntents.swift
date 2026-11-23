@@ -62,6 +62,21 @@ enum BoardFilterOption: String, AppEnum, CaseIterable {
     }
 }
 
+/// 锁屏看板显示模式（对应 Floaty `ComposeControlIntent` 的开关语义）
+enum BoardDisplayMode: String, AppEnum, CaseIterable {
+    case toggle
+    case show
+    case hide
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation = "显示模式"
+
+    static var caseDisplayRepresentations: [BoardDisplayMode: DisplayRepresentation] = [
+        .toggle: "切换显示",
+        .show: "显示",
+        .hide: "隐藏"
+    ]
+}
+
 // MARK: - 共享逻辑
 
 /// Intent 与主 App 共用的数据操作（不依赖 UI 线程状态）。
@@ -126,20 +141,57 @@ enum IntentSupport {
                                             focusIndex: store.boardFocusIndex)
     }
 
-    /// 计算新的聚焦下标（delta 为 nil 时按 +1 处理）
-    static func nextFocusIndex(delta: Int?, pageCount: Int) -> Int {
+    /// 计算新的聚焦下标
+    static func nextFocusIndex(delta: Int, pageCount: Int) -> Int {
         guard pageCount > 0 else { return 0 }
-        let step = delta ?? 1
         let current = FloatyBoard.focusIndex()
-        return min(max(0, current + step), pageCount - 1)
+        return min(max(0, current + delta), pageCount - 1)
     }
 
-    /// 计算新的页码（delta 为 nil 时按 +1 处理）
-    static func nextPageIndex(delta: Int?, pageCount: Int) -> Int {
+    /// 计算新的页码
+    static func nextPageIndex(delta: Int, pageCount: Int) -> Int {
         guard pageCount > 0 else { return 0 }
-        let step = delta ?? 1
         let current = FloatyBoard.pageIndex()
-        return min(max(0, current + step), pageCount - 1)
+        return min(max(0, current + delta), pageCount - 1)
+    }
+
+    /// 解析类型列表字符串（逗号 / 空格 / 换行分隔，也接受中文名）。
+    /// 空字符串表示「全部类型」。
+    static func kinds(fromText text: String) -> Set<FloatyKind> {
+        let separators = CharacterSet(charactersIn: ",，;； \t\n")
+        let parts = text.components(separatedBy: separators)
+        var result = Set<FloatyKind>()
+        for part in parts {
+            let key = part.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !key.isEmpty else { continue }
+            switch key {
+            case "pickup", "取件码", "取件":
+                result.insert(.pickup)
+            case "todo", "待办":
+                result.insert(.todo)
+            case "train", "火车票", "火车":
+                result.insert(.train)
+            case "flight", "机票", "航班":
+                result.insert(.flight)
+            default:
+                if let kind = FloatyKind(rawValue: key) {
+                    result.insert(kind)
+                }
+            }
+        }
+        return result
+    }
+
+    /// 解析多段文本（按换行分隔，`---` 也视作分隔符）。
+    static func texts(fromBlock block: String) -> [String] {
+        var result: [String] = []
+        for raw in block.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if line.isEmpty { continue }
+            if line == "---" { continue }
+            result.append(line)
+        }
+        return result
     }
 }
 
@@ -148,11 +200,11 @@ enum IntentSupport {
 /// 打开 App 并添加指定类型的内容（对应 `ComposeAttentionIntent`）。
 struct ComposeAttentionIntent: AppIntent {
     static var title: LocalizedStringResource = "添加内容"
-    static var description = IntentDescription("打开 App 添加取件码、待办、火车票或机票")
+    static var description: IntentDescription? = IntentDescription("打开 App 添加取件码、待办、火车票或机票")
     static var openAppWhenRun: Bool = true
 
-    @Parameter(title: "类型")
-    var kind: ComposeKind = .pickup
+    @Parameter(title: "类型", default: ComposeKind.pickup)
+    var kind: ComposeKind
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         FloatyRepository.savePendingComposeKind(kind.floatyKind)
@@ -163,7 +215,7 @@ struct ComposeAttentionIntent: AppIntent {
 /// 添加取件码（快捷指令）
 struct AddPickupCodeIntent: AppIntent {
     static var title: LocalizedStringResource = "添加取件码"
-    static var description = IntentDescription("打开 App 添加取件码")
+    static var description: IntentDescription? = IntentDescription("打开 App 添加取件码")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -175,7 +227,7 @@ struct AddPickupCodeIntent: AppIntent {
 /// 添加待办（快捷指令）
 struct AddTodoIntent: AppIntent {
     static var title: LocalizedStringResource = "添加待办"
-    static var description = IntentDescription("打开 App 添加待办")
+    static var description: IntentDescription? = IntentDescription("打开 App 添加待办")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -187,7 +239,7 @@ struct AddTodoIntent: AppIntent {
 /// 添加火车票（快捷指令）
 struct AddTrainTicketIntent: AppIntent {
     static var title: LocalizedStringResource = "添加火车票"
-    static var description = IntentDescription("打开 App 添加火车票")
+    static var description: IntentDescription? = IntentDescription("打开 App 添加火车票")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -199,7 +251,7 @@ struct AddTrainTicketIntent: AppIntent {
 /// 添加机票（快捷指令）
 struct AddFlightTicketIntent: AppIntent {
     static var title: LocalizedStringResource = "添加机票"
-    static var description = IntentDescription("打开 App 添加机票")
+    static var description: IntentDescription? = IntentDescription("打开 App 添加机票")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -211,10 +263,11 @@ struct AddFlightTicketIntent: AppIntent {
 /// 打开添加页（对应 `ComposePickerIntent`）
 struct ComposePickerIntent: AppIntent {
     static var title: LocalizedStringResource = "打开添加页"
-    static var description = IntentDescription("打开 App 的添加页面")
+    static var description: IntentDescription? = IntentDescription("打开 App 的添加页面")
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        FloatyRepository.savePendingComposeKind(.pickup)
         return .result(dialog: "打开添加页")
     }
 }
@@ -222,16 +275,21 @@ struct ComposePickerIntent: AppIntent {
 /// 控制中心 / 快捷指令：开关锁屏看板（对应 `ComposeControlIntent`）
 struct ComposeControlIntent: AppIntent {
     static var title: LocalizedStringResource = "切换锁屏看板"
-    static var description = IntentDescription("开启或关闭锁屏看板显示")
+    static var description: IntentDescription? = IntentDescription("开启或关闭锁屏看板显示")
     static var openAppWhenRun: Bool = false
 
-    /// 留空则按当前状态取反
-    @Parameter(title: "显示")
-    var show: Bool?
+    /// 默认「切换」：按当前状态取反
+    @Parameter(title: "模式", default: BoardDisplayMode.toggle)
+    var mode: BoardDisplayMode
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         var settings = IntentSupport.settings()
-        let target = show ?? !settings.showOnLockScreen
+        let target: Bool
+        switch mode {
+        case .toggle: target = !settings.showOnLockScreen
+        case .show: target = true
+        case .hide: target = false
+        }
         settings.showOnLockScreen = target
         if target && settings.boardFilter == .off {
             settings.boardFilter = .only
@@ -242,11 +300,12 @@ struct ComposeControlIntent: AppIntent {
         if target {
             IntentSupport.presentBoard()
             FloatyBoard.setVisible(true)
+            return .result(dialog: "已显示锁屏看板")
         } else {
             await BoardActivityManager.shared.dismissAll()
             FloatyBoard.setVisible(false)
+            return .result(dialog: "已隐藏锁屏看板")
         }
-        return .result(dialog: target ? "已显示锁屏看板" : "已隐藏锁屏看板")
     }
 }
 
@@ -255,17 +314,17 @@ struct ComposeControlIntent: AppIntent {
 /// 识别文本（对应 `RecognizeTextIntent`）
 struct RecognizeTextIntent: AppIntent {
     static var title: LocalizedStringResource = "识别文本"
-    static var description = IntentDescription("从短信、邮件或通知文本中识别取件码、火车票、机票或待办")
+    static var description: IntentDescription? = IntentDescription("从短信、邮件或通知文本中识别取件码、火车票、机票或待办")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "文本")
-    var text: String = ""
-    @Parameter(title: "快捷指令 ID")
-    var shortcutID: String?
-    @Parameter(title: "快捷指令版本")
-    var shortcutVersion: String?
-    @Parameter(title: "模式")
-    var mode: String?
+    @Parameter(title: "文本", default: "")
+    var text: String
+    @Parameter(title: "快捷指令 ID", default: "")
+    var shortcutID: String
+    @Parameter(title: "快捷指令版本", default: "")
+    var shortcutVersion: String
+    @Parameter(title: "模式", default: "")
+    var mode: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let settings = IntentSupport.settings()
@@ -284,23 +343,27 @@ struct RecognizeTextIntent: AppIntent {
 }
 
 /// 识别多段文本（对应 `RecognizeTextListIntent`）
+///
+/// 说明：AppIntents 不支持 `[String]` 集合参数，这里用「多行文本」承载批量输入，
+/// 每行一段（`---` 视为空行忽略）。
 struct RecognizeTextListIntent: AppIntent {
     static var title: LocalizedStringResource = "识别文本列表"
-    static var description = IntentDescription("批量识别文本并添加到「此刻」")
+    static var description: IntentDescription? = IntentDescription("批量识别文本并添加到「此刻」")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "文本列表")
-    var texts: [String] = []
-    @Parameter(title: "快捷指令 ID")
-    var shortcutID: String?
-    @Parameter(title: "快捷指令版本")
-    var shortcutVersion: String?
-    @Parameter(title: "模式")
-    var mode: String?
+    @Parameter(title: "文本列表", default: "")
+    var texts: String
+    @Parameter(title: "快捷指令 ID", default: "")
+    var shortcutID: String
+    @Parameter(title: "快捷指令版本", default: "")
+    var shortcutVersion: String
+    @Parameter(title: "模式", default: "")
+    var mode: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let settings = IntentSupport.settings()
-        let results = RecognitionEngine.recognizeList(texts: texts,
+        let blocks = IntentSupport.texts(fromBlock: texts)
+        let results = RecognitionEngine.recognizeList(texts: blocks,
                                                       templates: FloatyRepository.loadTemplates(),
                                                       builtinPickupEnabled: settings.builtinPickupEnabled)
         for result in results {
@@ -319,22 +382,26 @@ struct RecognizeTextListIntent: AppIntent {
 // MARK: - 锁屏看板控制
 
 /// 在锁屏显示看板（对应 `ShowLockScreenBoardIntent`）
+///
+/// 说明：AppIntents 不支持 `[ComposeKind]` 集合参数，这里用逗号分隔的类型串，
+/// 留空表示全部类型（如 `pickup,todo`）。
 struct ShowLockScreenBoardIntent: AppIntent {
     static var title: LocalizedStringResource = "在锁屏显示"
-    static var description = IntentDescription("在锁屏显示「此刻」看板")
+    static var description: IntentDescription? = IntentDescription("在锁屏显示「此刻」看板")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "类型")
-    var kinds: [ComposeKind] = []
-    @Parameter(title: "过滤方式")
-    var filter: BoardFilterOption = .only
+    @Parameter(title: "类型", default: "")
+    var kinds: String
+    @Parameter(title: "过滤方式", default: BoardFilterOption.only)
+    var filter: BoardFilterOption
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         var settings = IntentSupport.settings()
         settings.showOnLockScreen = true
         settings.boardFilter = filter.filter
-        if !kinds.isEmpty {
-            settings.boardKinds = Set(kinds.map(\.floatyKind))
+        let selected = IntentSupport.kinds(fromText: kinds)
+        if !selected.isEmpty {
+            settings.boardKinds = selected
         } else if settings.boardKinds.isEmpty {
             settings.boardKinds = Set(FloatyKind.allCases)
         }
@@ -349,17 +416,21 @@ struct ShowLockScreenBoardIntent: AppIntent {
 /// 在锁屏隐藏看板（对应 `HideLockScreenBoardIntent`）
 struct HideLockScreenBoardIntent: AppIntent {
     static var title: LocalizedStringResource = "不在锁屏显示"
-    static var description = IntentDescription("隐藏锁屏看板")
+    static var description: IntentDescription? = IntentDescription("隐藏锁屏看板")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "类型")
-    var kinds: [ComposeKind] = []
+    /// 留空表示隐藏全部类型
+    @Parameter(title: "类型", default: "")
+    var kinds: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         var settings = IntentSupport.settings()
         settings.showOnLockScreen = false
         settings.boardFilter = .off
-        settings.boardKinds = Set(kinds.map(\.floatyKind))
+        let selected = IntentSupport.kinds(fromText: kinds)
+        if !selected.isEmpty {
+            settings.boardKinds = selected
+        }
         IntentSupport.saveSettings(settings)
 
         await BoardActivityManager.shared.dismissAll()
@@ -371,7 +442,7 @@ struct HideLockScreenBoardIntent: AppIntent {
 /// 结束锁屏显示（对应 `DismissBoardIntent`）
 struct DismissBoardIntent: AppIntent {
     static var title: LocalizedStringResource = "结束锁屏显示"
-    static var description = IntentDescription("结束当前锁屏看板显示")
+    static var description: IntentDescription? = IntentDescription("结束当前锁屏看板显示")
     static var openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -384,12 +455,12 @@ struct DismissBoardIntent: AppIntent {
 /// 切换页面（对应 `PageHomeBoardListIntent`）
 struct PageHomeBoardListIntent: AppIntent {
     static var title: LocalizedStringResource = "切换页面"
-    static var description = IntentDescription("切换锁屏看板的页面")
+    static var description: IntentDescription? = IntentDescription("切换锁屏看板的页面")
     static var openAppWhenRun: Bool = false
 
-    /// 翻页步长，留空按 +1 处理
-    @Parameter(title: "偏移")
-    var delta: Int?
+    /// 翻页步长，默认 +1
+    @Parameter(title: "偏移", default: 1)
+    var delta: Int
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let settings = IntentSupport.settings()
@@ -409,12 +480,12 @@ struct PageHomeBoardListIntent: AppIntent {
 /// 切换聚焦项（对应 `FocusHomeBoardIntent`）
 struct FocusHomeBoardIntent: AppIntent {
     static var title: LocalizedStringResource = "切换项目"
-    static var description = IntentDescription("切换锁屏看板当前聚焦的内容")
+    static var description: IntentDescription? = IntentDescription("切换锁屏看板当前聚焦的内容")
     static var openAppWhenRun: Bool = false
 
-    /// 移动步长，留空按 +1 处理
-    @Parameter(title: "偏移")
-    var delta: Int?
+    /// 移动步长，默认 +1
+    @Parameter(title: "偏移", default: 1)
+    var delta: Int
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let settings = IntentSupport.settings()
@@ -433,12 +504,12 @@ struct FocusHomeBoardIntent: AppIntent {
 /// 切换聚焦项（对应 `FocusAttentionIntent`）
 struct FocusAttentionIntent: AppIntent {
     static var title: LocalizedStringResource = "切换当前项目"
-    static var description = IntentDescription("切换当前关注的内容")
+    static var description: IntentDescription? = IntentDescription("切换当前关注的内容")
     static var openAppWhenRun: Bool = false
 
-    /// 移动步长，留空按 +1 处理
-    @Parameter(title: "偏移")
-    var delta: Int?
+    /// 移动步长，默认 +1
+    @Parameter(title: "偏移", default: 1)
+    var delta: Int
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let settings = IntentSupport.settings()
@@ -459,7 +530,7 @@ struct FocusAttentionIntent: AppIntent {
 /// 完成当前聚焦的内容（对应 `CompleteAttentionIntent`）
 struct CompleteAttentionIntent: AppIntent {
     static var title: LocalizedStringResource = "标记完成"
-    static var description = IntentDescription("把当前聚焦的内容标记为已完成")
+    static var description: IntentDescription? = IntentDescription("把当前聚焦的内容标记为已完成")
     static var openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -475,10 +546,10 @@ struct CompleteAttentionIntent: AppIntent {
 /// 完成看板中的某条内容（对应 `CompleteBoardItemIntent`）
 struct CompleteBoardItemIntent: AppIntent {
     static var title: LocalizedStringResource = "完成内容"
-    static var description = IntentDescription("把指定内容标记为已完成")
+    static var description: IntentDescription? = IntentDescription("把指定内容标记为已完成")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "内容 ID")
+    @Parameter(title: "内容 ID", default: "")
     var itemID: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -495,10 +566,10 @@ struct CompleteBoardItemIntent: AppIntent {
 /// 完成取件码（对应 `CompletePickupLineIntent`）
 struct CompletePickupLineIntent: AppIntent {
     static var title: LocalizedStringResource = "完成取件"
-    static var description = IntentDescription("把指定取件码标记为已取件")
+    static var description: IntentDescription? = IntentDescription("把指定取件码标记为已取件")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "内容 ID")
+    @Parameter(title: "内容 ID", default: "")
     var itemID: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -515,12 +586,12 @@ struct CompletePickupLineIntent: AppIntent {
 /// 勾选待办子项（对应 `CheckChecklistLineIntent`）
 struct CheckChecklistLineIntent: AppIntent {
     static var title: LocalizedStringResource = "勾选子项"
-    static var description = IntentDescription("勾选或取消勾选待办清单中的子项")
+    static var description: IntentDescription? = IntentDescription("勾选或取消勾选待办清单中的子项")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "子项 ID")
+    @Parameter(title: "子项 ID", default: "")
     var entryID: String
-    @Parameter(title: "内容 ID")
+    @Parameter(title: "内容 ID", default: "")
     var itemID: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
@@ -537,12 +608,12 @@ struct CheckChecklistLineIntent: AppIntent {
 /// 勾选看板中的待办子项（对应 `CheckBoardChecklistLineIntent`）
 struct CheckBoardChecklistLineIntent: AppIntent {
     static var title: LocalizedStringResource = "勾选看板子项"
-    static var description = IntentDescription("勾选或取消勾选锁屏看板上的待办子项")
+    static var description: IntentDescription? = IntentDescription("勾选或取消勾选锁屏看板上的待办子项")
     static var openAppWhenRun: Bool = false
 
-    @Parameter(title: "子项 ID")
+    @Parameter(title: "子项 ID", default: "")
     var entryID: String
-    @Parameter(title: "内容 ID")
+    @Parameter(title: "内容 ID", default: "")
     var itemID: String
 
     func perform() async throws -> some IntentResult & ProvidesDialog {

@@ -8,18 +8,28 @@ on:
 jobs:
   build:
     name: Build unsigned ipa
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Select Xcode
         run: |
-          # 优先用 runner 自带的最新 Xcode，失败则回退到 15.4
-          sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer \
-            || sudo xcode-select -s /Applications/Xcode_15.3.app/Contents/Developer \
-            || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          # 依次尝试 runner 上可用的 Xcode（16.x → 15.4 → 15.3 → 默认）
+          for DEV in \
+            /Applications/Xcode_16.4.app/Contents/Developer \
+            /Applications/Xcode_16.3.app/Contents/Developer \
+            /Applications/Xcode_16.2.app/Contents/Developer \
+            /Applications/Xcode_16.app/Contents/Developer \
+            /Applications/Xcode_15.4.app/Contents/Developer \
+            /Applications/Xcode_15.3.app/Contents/Developer \
+            /Applications/Xcode.app/Contents/Developer ; do
+            if [ -d "$DEV" ]; then
+              sudo xcode-select -s "$DEV" && break
+            fi
+          done
           xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
 
       - name: Static project verification
         run: |
