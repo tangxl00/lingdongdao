@@ -212,7 +212,7 @@ struct ItemRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Image(systemName: item.kind.symbolName)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
                     .frame(width: 24)
 
                 Text(item.title)
@@ -280,7 +280,7 @@ struct BoardSummaryRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: "lock.rectangle")
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text("锁屏看板")
                     .font(.subheadline.weight(.semibold))

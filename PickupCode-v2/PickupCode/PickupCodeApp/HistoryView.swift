@@ -53,7 +53,7 @@ struct HistoryView: View {
             Image(systemName: record.isCompleted
                   ? "checkmark.circle.fill"
                   : (record.isExpired ? "clock.badge.exclamationmark" : record.kind.symbolName))
-                .foregroundStyle(record.isCompleted ? .green : (record.isExpired ? .orange : .accentColor))
+                .foregroundStyle(record.isCompleted ? Color.green : (record.isExpired ? Color.orange : Color.accentColor))
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {

@@ -72,7 +72,7 @@ struct FloatyWidgetView: View {
                     HStack(spacing: 6) {
                         Image(systemName: item.kind.symbolName)
                             .font(.caption2)
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
                             .frame(width: 14)
                         VStack(alignment: .leading, spacing: 0) {
                             Text(item.title)

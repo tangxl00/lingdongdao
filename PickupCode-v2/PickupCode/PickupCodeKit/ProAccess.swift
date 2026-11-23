@@ -23,7 +23,7 @@ enum ProAccess {
     static let showsPaywall: Bool = false
 
     /// 供 UI 展示的版本说明文案。
-    static let proDescription: String {
+    static var proDescription: String {
         "全部功能永久免费开源 · 无订阅 · 无内购"
     }
 }

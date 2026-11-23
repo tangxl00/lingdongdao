@@ -73,7 +73,7 @@ struct TemplateRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: template.kind.symbolName)
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
                 .frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

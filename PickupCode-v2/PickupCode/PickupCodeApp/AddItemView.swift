@@ -211,8 +211,8 @@ struct AddItemView: View {
             item = FloatyItem(
                 kind: .todo,
                 title: headline.trimmingCharacters(in: .whitespaces),
-                note: todoNote.trimmingCharacters(in: .whitespaces).isEmpty ? nil : todoNote,
                 due: todoHasDeadline ? FloatyDate.normalizeISO(todoDeadline) : nil,
+                note: todoNote.trimmingCharacters(in: .whitespaces).isEmpty ? nil : todoNote,
                 checklist: checklist
             )
         case .train:

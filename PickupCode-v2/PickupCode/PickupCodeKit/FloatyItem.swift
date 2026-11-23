@@ -97,9 +97,9 @@ struct FloatyItem: Codable, Identifiable, Hashable {
         self.dailyReminder = dailyReminder
     }
 
-    var dueDate: Date? { FloatyDate.date(fromISO: due) }
-    var departureDate: Date? { FloatyDate.date(fromISO: departure) }
-    var arrivalDate: Date? { FloatyDate.date(fromISO: arrival) }
+    var dueDate: Date? { due.flatMap { FloatyDate.date(fromISO: $0) } }
+    var departureDate: Date? { departure.flatMap { FloatyDate.date(fromISO: $0) } }
+    var arrivalDate: Date? { arrival.flatMap { FloatyDate.date(fromISO: $0) } }
 
     /// 倒计时参考时间：取件截止 / 出发时间 / 待办截止
     var referenceDate: Date? {
