@@ -169,6 +169,7 @@ floaty://add?text=<原始文本>&source=<sms|mail|notification|clipboard>
 | 添加 | `ComposeAttentionIntent(kind)`、`AddPickupCodeIntent`、`AddTodoIntent`、`AddTrainTicketIntent`、`AddFlightTicketIntent`、`ComposePickerIntent` |
 | 识别 | `RecognizeTextIntent(text, shortcutID, shortcutVersion, mode)`、`RecognizeTextListIntent(texts, …)` |
 | 看板 | `ShowLockScreenBoardIntent(kinds, filter)`、`HideLockScreenBoardIntent(kinds)`、`DismissBoardIntent`、`PageHomeBoardListIntent(delta)`、`FocusHomeBoardIntent(delta)`、`FocusAttentionIntent(delta)`、`ComposeControlIntent(mode)` |
+| 完成 | `CompleteAttentionIntent`、`CompleteBoardItemIntent(itemID)`、`CompletePickupLineIntent(itemID)`、`CheckChecklistLineIntent(entryID, itemID)`、`CheckBoardChecklistLineIntent(entryID, itemID)` |
 
 > **参数形态说明（AppIntents 不支持集合参数）**
 >
@@ -179,7 +180,6 @@ floaty://add?text=<原始文本>&source=<sms|mail|notification|clipboard>
 > | `mode`（看板开关） | `BoardDisplayMode` | `toggle` / `show` / `hide` 三选一 |
 > | `delta` | `Int` | 翻页 / 聚焦步长，默认 `1` |
 > | `itemID` / `entryID` | `String` | 内容 UUID 字符串 |
-| 完成 | `CompleteAttentionIntent`、`CompleteBoardItemIntent(itemID)`、`CompletePickupLineIntent(itemID)`、`CheckChecklistLineIntent(entryID, itemID)`、`CheckBoardChecklistLineIntent(entryID, itemID)` |
 
 App 快捷指令短语（`FloatyShortcuts`）：添加取件码 / 添加待办 / 添加火车票 / 添加机票 / 识别文本。
 
@@ -211,6 +211,8 @@ enum ProAccess {
 
 - 用途：验证代码可编译，不需要任何 Mac 与证书。
 - 限制：产物**未签名，不能装进 iPhone**；如需真机安装仍走第一章本地编译。
+- 产物名：`PickupCode-unsigned-ipa`（zip 内为 `PickupCode-unsigned.ipa`，内含 `Payload/PickupCode.app` 与 `Payload/PickupCode.app/PlugIns/PickupCodeWidget.appex`）。
+- 最近一次成功编译：commit `c392322`（run 45164048879），Xcode 16.4 / iOS SDK 18.5，Runner `macos-15-arm64`。
 
 ## 附录 B · 付费开发者账号增强（可选）
 
