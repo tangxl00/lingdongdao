@@ -8,25 +8,49 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		200000000000000000000001 /* PickupCodeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A0 /* PickupCodeApp.swift */; };
+		200000000000000000000001 /* FloatyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A0 /* FloatyApp.swift */; };
 		200000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A1 /* ContentView.swift */; };
 		200000000000000000000003 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A2 /* HistoryView.swift */; };
-		200000000000000000000004 /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A3 /* HistoryStore.swift */; };
-		200000000000000000000005 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A4 /* LiveActivityManager.swift */; };
-		200000000000000000000006 /* URLSchemeHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A5 /* URLSchemeHandler.swift */; };
-		200000000000000000000007 /* PickupCodeAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C0 /* PickupCodeAttributes.swift */; };
-		200000000000000000000008 /* PickupCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C1 /* PickupCode.swift */; };
-		200000000000000000000009 /* PickupCodeStoreProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C2 /* PickupCodeStoreProtocol.swift */; };
-		20000000000000000000000A /* PickupCodeAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C0 /* PickupCodeAttributes.swift */; };
-		20000000000000000000000B /* PickupCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C1 /* PickupCode.swift */; };
-		20000000000000000000000C /* PickupCodeStoreProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C2 /* PickupCodeStoreProtocol.swift */; };
-		20000000000000000000000D /* PickupCodeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B0 /* PickupCodeWidgetBundle.swift */; };
-		20000000000000000000000E /* PickupCodeLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B1 /* PickupCodeLiveActivity.swift */; };
-		20000000000000000000000F /* DynamicIslandViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B2 /* DynamicIslandViews.swift */; };
-		200000000000000000000010 /* LockScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B3 /* LockScreenView.swift */; };
-		200000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A6 /* Assets.xcassets */; };
-		200000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B4 /* Assets.xcassets */; };
-		200000000000000000000013 /* PickupCodeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000F2 /* PickupCodeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		200000000000000000000004 /* FloatyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A3 /* FloatyStore.swift */; };
+		200000000000000000000005 /* BoardActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A4 /* BoardActivityManager.swift */; };
+		200000000000000000000006 /* AutoAddEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A5 /* AutoAddEngine.swift */; };
+		200000000000000000000007 /* ReminderScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A6 /* ReminderScheduler.swift */; };
+		200000000000000000000008 /* FloatyIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A7 /* FloatyIntents.swift */; };
+		200000000000000000000009 /* AddItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A8 /* AddItemView.swift */; };
+		20000000000000000000000A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000A9 /* SettingsView.swift */; };
+		20000000000000000000000B /* TemplatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000AA /* TemplatesView.swift */; };
+		20000000000000000000000C /* RecognitionTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000AB /* RecognitionTestView.swift */; };
+		20000000000000000000000D /* FloatyKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C0 /* FloatyKind.swift */; };
+		20000000000000000000000E /* FloatyDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C1 /* FloatyDate.swift */; };
+		20000000000000000000000F /* FloatyItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C2 /* FloatyItem.swift */; };
+		200000000000000000000010 /* FloatyAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C3 /* FloatyAttributes.swift */; };
+		200000000000000000000011 /* RecognitionTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C4 /* RecognitionTemplate.swift */; };
+		200000000000000000000012 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C5 /* RecognitionEngine.swift */; };
+		200000000000000000000013 /* ProAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C6 /* ProAccess.swift */; };
+		200000000000000000000014 /* FloatyStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C7 /* FloatyStorage.swift */; };
+		200000000000000000000015 /* FloatySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C8 /* FloatySettings.swift */; };
+		200000000000000000000016 /* FloatyBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C9 /* FloatyBoard.swift */; };
+		200000000000000000000017 /* FloatyRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000CA /* FloatyRepository.swift */; };
+		200000000000000000000018 /* FloatyURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000CB /* FloatyURL.swift */; };
+		200000000000000000000019 /* PickupCodeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B0 /* PickupCodeWidgetBundle.swift */; };
+		20000000000000000000001A /* BoardLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B1 /* BoardLiveActivity.swift */; };
+		20000000000000000000001B /* FloatyWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B2 /* FloatyWidget.swift */; };
+		20000000000000000000001C /* FloatyKind.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C0 /* FloatyKind.swift */; };
+		20000000000000000000001D /* FloatyDate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C1 /* FloatyDate.swift */; };
+		20000000000000000000001E /* FloatyItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C2 /* FloatyItem.swift */; };
+		20000000000000000000001F /* FloatyAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C3 /* FloatyAttributes.swift */; };
+		200000000000000000000020 /* RecognitionTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C4 /* RecognitionTemplate.swift */; };
+		200000000000000000000021 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C5 /* RecognitionEngine.swift */; };
+		200000000000000000000022 /* ProAccess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C6 /* ProAccess.swift */; };
+		200000000000000000000023 /* FloatyStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C7 /* FloatyStorage.swift */; };
+		200000000000000000000024 /* FloatySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C8 /* FloatySettings.swift */; };
+		200000000000000000000025 /* FloatyBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000C9 /* FloatyBoard.swift */; };
+		200000000000000000000026 /* FloatyRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000CA /* FloatyRepository.swift */; };
+		200000000000000000000027 /* FloatyURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000CB /* FloatyURL.swift */; };
+		200000000000000000000028 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000AC /* Assets.xcassets */; };
+		200000000000000000000029 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000B3 /* Assets.xcassets */; };
+		20000000000000000000002A /* PickupCodeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000F2 /* PickupCodeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		20000000000000000000002B /* FloatyAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1000000000000000000000AF /* FloatyAppDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,7 +70,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				200000000000000000000013 /* PickupCodeWidget.appex in Embed Foundation Extensions */,
+				20000000000000000000002A /* PickupCodeWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -54,25 +78,40 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		1000000000000000000000A0 /* PickupCodeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCodeApp.swift; sourceTree = "<group>"; };
+		1000000000000000000000A0 /* FloatyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyApp.swift; sourceTree = "<group>"; };
 		1000000000000000000000A1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1000000000000000000000A2 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
-		1000000000000000000000A3 /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryStore.swift; sourceTree = "<group>"; };
-		1000000000000000000000A4 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
-		1000000000000000000000A5 /* URLSchemeHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLSchemeHandler.swift; sourceTree = "<group>"; };
-		1000000000000000000000A6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		1000000000000000000000A7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		1000000000000000000000A8 /* PickupCodeApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickupCodeApp.entitlements; sourceTree = "<group>"; };
+		1000000000000000000000A3 /* FloatyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyStore.swift; sourceTree = "<group>"; };
+		1000000000000000000000A4 /* BoardActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardActivityManager.swift; sourceTree = "<group>"; };
+		1000000000000000000000A5 /* AutoAddEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoAddEngine.swift; sourceTree = "<group>"; };
+		1000000000000000000000A6 /* ReminderScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderScheduler.swift; sourceTree = "<group>"; };
+		1000000000000000000000A7 /* FloatyIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyIntents.swift; sourceTree = "<group>"; };
+		1000000000000000000000A8 /* AddItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddItemView.swift; sourceTree = "<group>"; };
+		1000000000000000000000A9 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		1000000000000000000000AA /* TemplatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemplatesView.swift; sourceTree = "<group>"; };
+		1000000000000000000000AB /* RecognitionTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionTestView.swift; sourceTree = "<group>"; };
+		1000000000000000000000AC /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1000000000000000000000AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1000000000000000000000AE /* PickupCodeApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickupCodeApp.entitlements; sourceTree = "<group>"; };
+		1000000000000000000000AF /* FloatyAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyAppDelegate.swift; sourceTree = "<group>"; };
 		1000000000000000000000B0 /* PickupCodeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCodeWidgetBundle.swift; sourceTree = "<group>"; };
-		1000000000000000000000B1 /* PickupCodeLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCodeLiveActivity.swift; sourceTree = "<group>"; };
-		1000000000000000000000B2 /* DynamicIslandViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DynamicIslandViews.swift; sourceTree = "<group>"; };
-		1000000000000000000000B3 /* LockScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenView.swift; sourceTree = "<group>"; };
-		1000000000000000000000B4 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		1000000000000000000000B5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		1000000000000000000000B6 /* PickupCodeWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickupCodeWidget.entitlements; sourceTree = "<group>"; };
-		1000000000000000000000C0 /* PickupCodeAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCodeAttributes.swift; sourceTree = "<group>"; };
-		1000000000000000000000C1 /* PickupCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCode.swift; sourceTree = "<group>"; };
-		1000000000000000000000C2 /* PickupCodeStoreProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickupCodeStoreProtocol.swift; sourceTree = "<group>"; };
+		1000000000000000000000B1 /* BoardLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardLiveActivity.swift; sourceTree = "<group>"; };
+		1000000000000000000000B2 /* FloatyWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyWidget.swift; sourceTree = "<group>"; };
+		1000000000000000000000B3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		1000000000000000000000B4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		1000000000000000000000B5 /* PickupCodeWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PickupCodeWidget.entitlements; sourceTree = "<group>"; };
+		1000000000000000000000C0 /* FloatyKind.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyKind.swift; sourceTree = "<group>"; };
+		1000000000000000000000C1 /* FloatyDate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyDate.swift; sourceTree = "<group>"; };
+		1000000000000000000000C2 /* FloatyItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyItem.swift; sourceTree = "<group>"; };
+		1000000000000000000000C3 /* FloatyAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyAttributes.swift; sourceTree = "<group>"; };
+		1000000000000000000000C4 /* RecognitionTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionTemplate.swift; sourceTree = "<group>"; };
+		1000000000000000000000C5 /* RecognitionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionEngine.swift; sourceTree = "<group>"; };
+		1000000000000000000000C6 /* ProAccess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProAccess.swift; sourceTree = "<group>"; };
+		1000000000000000000000C7 /* FloatyStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyStorage.swift; sourceTree = "<group>"; };
+		1000000000000000000000C8 /* FloatySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatySettings.swift; sourceTree = "<group>"; };
+		1000000000000000000000C9 /* FloatyBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyBoard.swift; sourceTree = "<group>"; };
+		1000000000000000000000CA /* FloatyRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyRepository.swift; sourceTree = "<group>"; };
+		1000000000000000000000CB /* FloatyURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatyURL.swift; sourceTree = "<group>"; };
 		1000000000000000000000F1 /* PickupCode.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PickupCode.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1000000000000000000000F2 /* PickupCodeWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PickupCodeWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -117,15 +156,22 @@
 		000000000000000000000010 /* PickupCodeApp */ = {
 			isa = PBXGroup;
 			children = (
-				1000000000000000000000A6 /* Assets.xcassets */,
-				1000000000000000000000A3 /* HistoryStore.swift */,
-				1000000000000000000000A2 /* HistoryView.swift */,
-				1000000000000000000000A4 /* LiveActivityManager.swift */,
-				1000000000000000000000A7 /* Info.plist */,
-				1000000000000000000000A8 /* PickupCodeApp.entitlements */,
-				1000000000000000000000A0 /* PickupCodeApp.swift */,
-				1000000000000000000000A5 /* URLSchemeHandler.swift */,
+				1000000000000000000000AC /* Assets.xcassets */,
+				1000000000000000000000A8 /* AddItemView.swift */,
+				1000000000000000000000A5 /* AutoAddEngine.swift */,
+				1000000000000000000000A4 /* BoardActivityManager.swift */,
 				1000000000000000000000A1 /* ContentView.swift */,
+				1000000000000000000000A0 /* FloatyApp.swift */,
+				1000000000000000000000AF /* FloatyAppDelegate.swift */,
+				1000000000000000000000A7 /* FloatyIntents.swift */,
+				1000000000000000000000A3 /* FloatyStore.swift */,
+				1000000000000000000000A2 /* HistoryView.swift */,
+				1000000000000000000000AD /* Info.plist */,
+				1000000000000000000000AB /* RecognitionTestView.swift */,
+				1000000000000000000000A6 /* ReminderScheduler.swift */,
+				1000000000000000000000A9 /* SettingsView.swift */,
+				1000000000000000000000AA /* TemplatesView.swift */,
+				1000000000000000000000AE /* PickupCodeApp.entitlements */,
 			);
 			path = PickupCodeApp;
 			sourceTree = "<group>";
@@ -133,12 +179,11 @@
 		000000000000000000000011 /* PickupCodeWidget */ = {
 			isa = PBXGroup;
 			children = (
-				1000000000000000000000B4 /* Assets.xcassets */,
-				1000000000000000000000B2 /* DynamicIslandViews.swift */,
-				1000000000000000000000B3 /* LockScreenView.swift */,
-				1000000000000000000000B5 /* Info.plist */,
-				1000000000000000000000B6 /* PickupCodeWidget.entitlements */,
-				1000000000000000000000B1 /* PickupCodeLiveActivity.swift */,
+				1000000000000000000000B3 /* Assets.xcassets */,
+				1000000000000000000000B1 /* BoardLiveActivity.swift */,
+				1000000000000000000000B2 /* FloatyWidget.swift */,
+				1000000000000000000000B4 /* Info.plist */,
+				1000000000000000000000B5 /* PickupCodeWidget.entitlements */,
 				1000000000000000000000B0 /* PickupCodeWidgetBundle.swift */,
 			);
 			path = PickupCodeWidget;
@@ -147,9 +192,18 @@
 		000000000000000000000012 /* PickupCodeKit */ = {
 			isa = PBXGroup;
 			children = (
-				1000000000000000000000C0 /* PickupCodeAttributes.swift */,
-				1000000000000000000000C1 /* PickupCode.swift */,
-				1000000000000000000000C2 /* PickupCodeStoreProtocol.swift */,
+				1000000000000000000000C3 /* FloatyAttributes.swift */,
+				1000000000000000000000C9 /* FloatyBoard.swift */,
+				1000000000000000000000C1 /* FloatyDate.swift */,
+				1000000000000000000000C2 /* FloatyItem.swift */,
+				1000000000000000000000C0 /* FloatyKind.swift */,
+				1000000000000000000000CA /* FloatyRepository.swift */,
+				1000000000000000000000C7 /* FloatyStorage.swift */,
+				1000000000000000000000C8 /* FloatySettings.swift */,
+				1000000000000000000000CB /* FloatyURL.swift */,
+				1000000000000000000000C6 /* ProAccess.swift */,
+				1000000000000000000000C5 /* RecognitionEngine.swift */,
+				1000000000000000000000C4 /* RecognitionTemplate.swift */,
 			);
 			path = PickupCodeKit;
 			sourceTree = "<group>";
@@ -243,7 +297,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				200000000000000000000011 /* Assets.xcassets in Resources */,
+				200000000000000000000028 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -251,7 +305,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				200000000000000000000012 /* Assets.xcassets in Resources */,
+				200000000000000000000029 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -262,15 +316,31 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				200000000000000000000001 /* PickupCodeApp.swift in Sources */,
+				200000000000000000000001 /* FloatyApp.swift in Sources */,
+				20000000000000000000002B /* FloatyAppDelegate.swift in Sources */,
 				200000000000000000000002 /* ContentView.swift in Sources */,
 				200000000000000000000003 /* HistoryView.swift in Sources */,
-				200000000000000000000004 /* HistoryStore.swift in Sources */,
-				200000000000000000000005 /* LiveActivityManager.swift in Sources */,
-				200000000000000000000006 /* URLSchemeHandler.swift in Sources */,
-				200000000000000000000007 /* PickupCodeAttributes.swift in Sources */,
-				200000000000000000000008 /* PickupCode.swift in Sources */,
-				200000000000000000000009 /* PickupCodeStoreProtocol.swift in Sources */,
+				200000000000000000000004 /* FloatyStore.swift in Sources */,
+				200000000000000000000005 /* BoardActivityManager.swift in Sources */,
+				200000000000000000000006 /* AutoAddEngine.swift in Sources */,
+				200000000000000000000007 /* ReminderScheduler.swift in Sources */,
+				200000000000000000000008 /* FloatyIntents.swift in Sources */,
+				200000000000000000000009 /* AddItemView.swift in Sources */,
+				20000000000000000000000A /* SettingsView.swift in Sources */,
+				20000000000000000000000B /* TemplatesView.swift in Sources */,
+				20000000000000000000000C /* RecognitionTestView.swift in Sources */,
+				20000000000000000000000D /* FloatyKind.swift in Sources */,
+				20000000000000000000000E /* FloatyDate.swift in Sources */,
+				20000000000000000000000F /* FloatyItem.swift in Sources */,
+				200000000000000000000010 /* FloatyAttributes.swift in Sources */,
+				200000000000000000000011 /* RecognitionTemplate.swift in Sources */,
+				200000000000000000000012 /* RecognitionEngine.swift in Sources */,
+				200000000000000000000013 /* ProAccess.swift in Sources */,
+				200000000000000000000014 /* FloatyStorage.swift in Sources */,
+				200000000000000000000015 /* FloatySettings.swift in Sources */,
+				200000000000000000000016 /* FloatyBoard.swift in Sources */,
+				200000000000000000000017 /* FloatyRepository.swift in Sources */,
+				200000000000000000000018 /* FloatyURL.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -278,13 +348,21 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				20000000000000000000000D /* PickupCodeWidgetBundle.swift in Sources */,
-				20000000000000000000000E /* PickupCodeLiveActivity.swift in Sources */,
-				20000000000000000000000F /* DynamicIslandViews.swift in Sources */,
-				200000000000000000000010 /* LockScreenView.swift in Sources */,
-				20000000000000000000000A /* PickupCodeAttributes.swift in Sources */,
-				20000000000000000000000B /* PickupCode.swift in Sources */,
-				20000000000000000000000C /* PickupCodeStoreProtocol.swift in Sources */,
+				200000000000000000000019 /* PickupCodeWidgetBundle.swift in Sources */,
+				20000000000000000000001A /* BoardLiveActivity.swift in Sources */,
+				20000000000000000000001B /* FloatyWidget.swift in Sources */,
+				20000000000000000000001C /* FloatyKind.swift in Sources */,
+				20000000000000000000001D /* FloatyDate.swift in Sources */,
+				20000000000000000000001E /* FloatyItem.swift in Sources */,
+				20000000000000000000001F /* FloatyAttributes.swift in Sources */,
+				200000000000000000000020 /* RecognitionTemplate.swift in Sources */,
+				200000000000000000000021 /* RecognitionEngine.swift in Sources */,
+				200000000000000000000022 /* ProAccess.swift in Sources */,
+				200000000000000000000023 /* FloatyStorage.swift in Sources */,
+				200000000000000000000024 /* FloatySettings.swift in Sources */,
+				200000000000000000000025 /* FloatyBoard.swift in Sources */,
+				200000000000000000000026 /* FloatyRepository.swift in Sources */,
+				200000000000000000000027 /* FloatyURL.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -310,7 +388,6 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
@@ -320,7 +397,6 @@
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = ("DEBUG=1", "$(inherited)");
@@ -352,7 +428,6 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
@@ -396,7 +471,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.pickupcode;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -422,7 +497,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.pickupcode;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -446,7 +521,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.pickupcode.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -471,7 +546,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourteam.pickupcode.widget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

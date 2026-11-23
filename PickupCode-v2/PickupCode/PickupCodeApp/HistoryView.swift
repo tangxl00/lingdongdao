@@ -1,12 +1,13 @@
 import SwiftUI
+import UIKit
 
-/// 历史记录列表：左滑删除、复制取件码、标记已取件、清空已完结。
+/// 历史记录：进行中 / 已完结分组，左滑删除、复制、标记完成。
 struct HistoryView: View {
-    @EnvironmentObject private var history: HistoryStore
+    @EnvironmentObject private var store: FloatyStore
 
     var body: some View {
         Group {
-            if history.records.isEmpty {
+            if store.items.isEmpty {
                 emptyState
             } else {
                 list
@@ -18,8 +19,8 @@ struct HistoryView: View {
 
     private var list: some View {
         List {
-            let active = history.activeRecords
-            let finished = history.records.filter { $0.isCompleted || $0.isExpired }
+            let active = store.items.filter { !$0.isCompleted && !$0.isExpired }
+            let finished = store.items.filter { $0.isCompleted || $0.isExpired }
 
             if !active.isEmpty {
                 Section("进行中") {
@@ -34,15 +35,11 @@ struct HistoryView: View {
                     row(record)
                 }
             } header: {
-                if finished.isEmpty {
-                    Text("暂无已完结记录")
-                } else {
-                    Text("已完结")
-                }
+                Text(finished.isEmpty ? "暂无已完结记录" : "已完结")
             } footer: {
                 if !finished.isEmpty {
                     Button(role: .destructive) {
-                        history.clearCompleted()
+                        store.clearCompleted()
                     } label: {
                         Text("清空已完结记录")
                     }
@@ -51,26 +48,29 @@ struct HistoryView: View {
         }
     }
 
-    private func row(_ record: PickupCode) -> some View {
+    private func row(_ record: FloatyItem) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: record.isCompleted ? "checkmark.circle.fill" : (record.isExpired ? "clock.badge.exclamationmark" : "shippingbox.fill"))
+            Image(systemName: record.isCompleted
+                  ? "checkmark.circle.fill"
+                  : (record.isExpired ? "clock.badge.exclamationmark" : record.kind.symbolName))
                 .foregroundStyle(record.isCompleted ? .green : (record.isExpired ? .orange : .accentColor))
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(record.code)
+                    Text(record.title)
                         .font(.title3.weight(.bold).monospaced())
-
                     Text(record.statusText)
                         .font(.caption)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background( capsuleBackground(for: record))
+                        .background(capsuleBackground(for: record))
                 }
 
-                Text(record.station)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                if let subtitle = record.displaySubtitle {
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
 
                 Text("\(record.createdAt.formatted(date: .abbreviated, time: .shortened)) 收到")
                     .font(.caption)
@@ -81,36 +81,35 @@ struct HistoryView: View {
 
             if !record.isCompleted && !record.isExpired {
                 Button {
-                    UIPasteboard.general.string = record.code
+                    UIPasteboard.general.string = record.title
                 } label: {
                     Image(systemName: "doc.on.doc")
                 }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("复制取件码 \(record.code)")
+                .accessibilityLabel("复制 \(record.title)")
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(role: .destructive) {
-                history.deleteRecord(id: record.id)
+                store.deleteRecord(id: record.id)
+                AutoAddEngine.refreshBoard()
             } label: {
                 Label("删除", systemImage: "trash")
             }
 
             if !record.isCompleted && !record.isExpired {
                 Button {
-                    history.markCompleted(code: record.code)
-                    Task {
-                        try? await LiveActivityManager.shared.endActivity(forCode: record.code)
-                    }
+                    store.markCompleted(id: record.id)
+                    AutoAddEngine.refreshBoard()
                 } label: {
-                    Label("已取件", systemImage: "checkmark.circle.fill")
+                    Label("完成", systemImage: "checkmark.circle.fill")
                 }
                 .tint(.green)
             }
         }
     }
 
-    private func capsuleBackground(for record: PickupCode) -> some ShapeStyle {
+    private func capsuleBackground(for record: FloatyItem) -> some ShapeStyle {
         if record.isCompleted { return Color.green.opacity(0.15) }
         if record.isExpired { return Color.orange.opacity(0.15) }
         return Color.accentColor.opacity(0.12)
@@ -134,6 +133,6 @@ struct HistoryView: View {
 #Preview {
     NavigationStack {
         HistoryView()
-            .environmentObject(HistoryStore.shared)
+            .environmentObject(FloatyStore.shared)
     }
 }

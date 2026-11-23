@@ -1,64 +1,7 @@
 import Foundation
 
-/// 取件码实体：历史记录数据模型（主 App 与 Widget 共享）。
-///
-/// 基础字段与《技术架构设计文档》第 1 节 PickupCodeKit/PickupCode.swift 一致
-/// （code、station、courier、expiry、createdAt、isCompleted），
-/// 另为 URL 契约中的 note 参数、稳定标识与状态判定补充了 id / note / isExpired / didStartActivity 字段。
-struct PickupCode: Codable, Identifiable, Hashable {
-    var id: UUID
-    var code: String
-    var station: String
-    var courier: String?
-    /// 过期时间，标准 ISO 8601 字符串（带时区偏移）
-    var expiry: String?
-    /// 附加备注（URL 契约可选参数）
-    var note: String?
-    var createdAt: Date
-    var isCompleted: Bool
-    /// 已超时（Live Activity 超过系统 8 小时上限自动消失，未被用户确认取件）
-    var isExpired: Bool
-    /// 是否成功启动过 Live Activity（对账时用于区分"从未启动"与"已结束"）
-    var didStartActivity: Bool
-
-    init(id: UUID = UUID(),
-         code: String,
-         station: String,
-         courier: String? = nil,
-         expiry: String? = nil,
-         note: String? = nil,
-         createdAt: Date = Date(),
-         isCompleted: Bool = false,
-         isExpired: Bool = false,
-         didStartActivity: Bool = false) {
-        self.id = id
-        self.code = code
-        self.station = station
-        self.courier = courier
-        self.expiry = expiry
-        self.note = note
-        self.createdAt = createdAt
-        self.isCompleted = isCompleted
-        self.isExpired = isExpired
-        self.didStartActivity = didStartActivity
-    }
-
-    /// 过期时间解析结果（expiry 非法时为 nil）
-    var expiryDate: Date? {
-        guard let expiry, !expiry.isEmpty else { return nil }
-        return PickupCodeDate.date(fromISO: expiry)
-    }
-
-    /// 状态显示文案
-    var statusText: String {
-        if isCompleted { return "已取件" }
-        if isExpired { return "已超时" }
-        return "进行中"
-    }
-}
-
-/// 取件码相关的日期/时间工具（App 与 Widget 共用）。
-enum PickupCodeDate {
+/// 时间工具（主 App 与 Widget Extension 共用）。
+enum FloatyDate {
 
     /// ISO 8601 解析。
     /// 兼容：带/不带毫秒、带/不带时区偏移；无时区时按当前时区处理。
@@ -95,9 +38,9 @@ enum PickupCodeDate {
         return formatter.string(from: date)
     }
 
-    /// 剩余时间描述（契约：由 App 计算后写入 ContentState.timeRemainingText）
+    /// 剩余时间描述（由 App 计算后写入 ContentState.timeRemainingText）
     static func timeRemainingText(from date: Date?, now: Date = Date()) -> String {
-        guard let date else { return "尽快取件" }
+        guard let date else { return "尽快处理" }
         let interval = date.timeIntervalSince(now)
         if interval <= 0 { return "已到期" }
         let hours = Int(interval) / 3600
@@ -111,5 +54,53 @@ enum PickupCodeDate {
     static func isExpiringSoon(_ date: Date?, now: Date = Date()) -> Bool {
         guard let date else { return false }
         return date.timeIntervalSince(now) <= 3600
+    }
+
+    /// 解析"出发时间"文案：
+    /// - 英文：`Oct 24 14:30`、`Oct 24`
+    /// - 中文：`10月24日14:30`
+    static func parseDeparture(_ text: String, now: Date = Date()) -> Date? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let iso = date(fromISO: trimmed) { return iso }
+
+        let enFormats = ["MMM d HH:mm", "MMM d, HH:mm", "MMM d h:mm a", "MMM d"]
+        for format in enFormats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = .current
+            formatter.dateFormat = format
+            if let parsed = formatter.date(from: trimmed) { return parsed }
+        }
+
+        let normalized = trimmed
+            .replacingOccurrences(of: "月", with: " ")
+            .replacingOccurrences(of: "日", with: " ")
+            .replacingOccurrences(of: "号", with: " ")
+        let zhFormats = ["M d HH:mm", "M d H:mm", "M d"]
+        for format in zhFormats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = .current
+            formatter.dateFormat = format
+            if let parsed = formatter.date(from: normalized) { return parsed }
+        }
+        return nil
+    }
+
+    /// `09:00` → 今天的 09:00
+    static func parseTimeOnly(_ text: String, now: Date = Date()) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm"
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let time = formatter.date(from: trimmed) else { return nil }
+        let calendar = Calendar.current
+        return calendar.date(
+            bySettingHour: calendar.component(.hour, from: time),
+            minute: calendar.component(.minute, from: time),
+            second: 0,
+            of: now
+        )
     }
 }
