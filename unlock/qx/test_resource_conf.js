@@ -1,12 +1,13 @@
 // ============================================================================
-//  floaty_qx.resource.conf 结构校验
+//  floaty_qx.resource.conf 结构校验（按 QX 远程 rewrite 资源的真实规范）
 //
 //    node test_resource_conf.js
 //
-//  为什么单独测：
-//    QX 的资源文件是「一键导入」的入口，一旦格式错（比如用了 /* */ 注释、
-//    段名拼错、规则缺 requires-body），用户拉下来会静默失败 ——
-//    规则显示已启用但根本不生效，非常难排查。
+//  血的教训：
+//    第一版测试断言「必须有 [MITM] / [rewrite] 段头」—— 这是错的。
+//    QX 的远程 rewrite 资源是**逐行解析的纯规则列表**，段头和 hostname =
+//    行都无法识别，导入时会直接报 "1 problem in sub-resource"。
+//    所以本测试现在断言的是「**不能**有段头和 hostname 行」。
 // ============================================================================
 
 const fs = require("fs");
@@ -23,32 +24,34 @@ function check(name, cond, detail) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. 段结构
+// 1. 绝不能出现段头（QX 远程资源不认）
 // ---------------------------------------------------------------------------
-console.log("== 1. 段结构 ==");
-const sections = [...txt.matchAll(/^\[(\w+)\]/gm)].map((m) => m[1]);
-check("有 [MITM] 段", sections.includes("MITM"), sections.join(","));
-check("有 [rewrite] 段", sections.includes("rewrite"), sections.join(","));
+console.log("== 1. 不能有段头（否则 QX 报 problem in sub-resource） ==");
+const sectionHeaders = [...txt.matchAll(/^\s*\[[^\]]+\]\s*$/gm)].map((m) =>
+  m[0].trim());
+check("没有 [rewrite] 段头", !sectionHeaders.some((s) => /\[rewrite\]/i.test(s)),
+      sectionHeaders.join(" "));
+check("没有 [MITM] 段头", !sectionHeaders.some((s) => /\[MITM\]/i.test(s)),
+      sectionHeaders.join(" "));
+check("完全没有方括号段头", sectionHeaders.length === 0,
+      "发现: " + sectionHeaders.join(" "));
 
 // ---------------------------------------------------------------------------
-// 2. 注释风格：QX 只认 # ; // —— 有 /* */ 会解析失败
+// 2. 不能有 hostname = 行（那是 .conf 配置文件才有的）
 // ---------------------------------------------------------------------------
-console.log("== 2. 注释风格 ==");
+console.log("== 2. 不能有 hostname 行 ==");
+const hostLines = txt.split("\n").filter((l) =>
+  /^\s*hostname\s*=/i.test(l));
+check("没有 hostname = 行", hostLines.length === 0, hostLines.join(" | "));
+
+// ---------------------------------------------------------------------------
+// 3. 注释风格：QX 只认 # ; // —— 有 /* */ 会解析失败
+// ---------------------------------------------------------------------------
+console.log("== 3. 注释风格 ==");
 check("没有块注释 /* */", !/\/\*|\*\//.test(txt));
 
 // ---------------------------------------------------------------------------
-// 3. MITM 域名
-// ---------------------------------------------------------------------------
-console.log("== 3. MITM 域名 ==");
-const mitmLine = txt.split("\n").find((l) => l.trim().startsWith("hostname"));
-check("有 hostname 行", !!mitmLine, "缺失");
-if (mitmLine) {
-  check("含 api.revenuecat.com", mitmLine.includes("api.revenuecat.com"), mitmLine);
-  check("含 api.revenuecat.biz", mitmLine.includes("api.revenuecat.biz"), mitmLine);
-}
-
-// ---------------------------------------------------------------------------
-// 4. 规则行
+// 4. 有效规则行
 // ---------------------------------------------------------------------------
 console.log("== 4. 规则行 ==");
 const rules = txt
@@ -57,12 +60,13 @@ const rules = txt
   .filter((l) => !l.trim().startsWith("#"))
   .filter((l) => !l.trim().startsWith(";"))
   .filter((l) => !l.trim().startsWith("//"))
-  .filter((l) => !l.trim().startsWith("["))
-  .filter((l) => !l.trim().startsWith("hostname"));
+  .filter((l) => !l.trim().startsWith("["));
 
 check("恰好 1 条规则", rules.length === 1, "实际 " + rules.length + " 条");
 const rule = rules[0] || "";
 
+check("形如 <url-regex> url <action>", /^\^?\S+\s+url\s+\S+/.test(rule),
+      rule.slice(0, 80));
 check("含 script-response-body", /script-response-body/.test(rule));
 check("含 requires-body=true", /requires-body\s*=\s*true/.test(rule),
       "缺了 QX 不会把响应体交给脚本");
@@ -76,7 +80,7 @@ check("脚本 URL 是绝对地址", /script-response-body\s+https?:\/\//.test(ru
 // 5. 正则行为
 // ---------------------------------------------------------------------------
 console.log("== 5. 正则行为 ==");
-const m = rule.match(/^(\^https\S+)/);
+const m = rule.match(/^(\S+)\s+url\s+/);
 check("能抓到正则", !!m);
 if (m) {
   const re = new RegExp(m[1]);
@@ -106,17 +110,20 @@ if (m) {
 }
 
 // ---------------------------------------------------------------------------
-// 6. 镜像地址（镜像挂了用户就拉不到）
+// 6. 文件必须能逐行安全解析（模拟 QX 的逐行读取）
 // ---------------------------------------------------------------------------
-console.log("== 6. 镜像地址 ==");
-const mirrors = [
-  "https://gcore.jsdelivr.net/gh/tangxl00/lingdongdao@main",
-  "https://fastly.jsdelivr.net/gh/tangxl00/lingdongdao@main",
-  "https://ghproxy.net/https://raw.githubusercontent.com/tangxl00/lingdongdao/main",
-];
-mirrors.forEach((m) => {
-  check("注释里列了镜像 " + m.split("/")[2], txt.includes(m));
+console.log("== 6. 逐行可解析性 ==");
+let badLines = [];
+txt.split("\n").forEach((line, i) => {
+  const s = line.trim();
+  if (!s) return;
+  if (s.startsWith("#") || s.startsWith(";") || s.startsWith("//")) return;
+  // 非注释行必须是 <regex> url <action> 形式
+  if (!/^\S+\s+url\s+\S+/.test(s)) {
+    badLines.push((i + 1) + ": " + s.slice(0, 60));
+  }
 });
+check("所有非注释行都是合法规则", badLines.length === 0, badLines.join(" | "));
 
 console.log("");
 if (fail === 0) {
