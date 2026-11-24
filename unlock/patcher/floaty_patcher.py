@@ -41,6 +41,13 @@ import struct
 import sys
 from typing import Dict, List, Optional, Tuple
 
+# Windows 控制台默认 GBK，无法编码 ✓ / → 等符号，强制 UTF-8 输出
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
+
 # ---------------------------------------------------------------------------
 # Mach-O 常量
 # ---------------------------------------------------------------------------
@@ -320,6 +327,79 @@ def verify_binary(path: str, expect_dylib: str) -> bool:
         % ("✓ 已注入" if ok else "✗ 缺失", m.ncmds, m.header_slack)
     )
     return ok
+
+
+# ---------------------------------------------------------------------------
+# 代码签名：读取原版 entitlements / 失效签名的清理
+# ---------------------------------------------------------------------------
+
+CSMAGIC_EMBEDDED_SIGNATURE = 0xFADE0CC0
+CSMAGIC_BLOBWRAPPER = 0xFADE0CC1
+CSMAGIC_ENTITLEMENTS = 0xFADE7171
+
+
+def extract_entitlements(path: str) -> Optional[str]:
+    """从 Mach-O 的代码签名里抠出 entitlements plist（XML 文本）。
+
+    注入 dylib 会让原签名失效，重新假签时必须用这份原始 entitlements，
+    否则 App Group（group.com.enjoyio.floaty）会丢，Live Activity 失效。
+    """
+    with open(path, "rb") as fh:
+        d = fh.read()
+
+    ncmds = struct.unpack_from("<I", d, 16)[0]
+    off = 32
+    sig = None
+    for _ in range(ncmds):
+        cmd, cmdsize = struct.unpack_from("<II", d, off)
+        if cmd == LC_CODE_SIGNATURE:
+            dataoff, datasize = struct.unpack_from("<II", d, off + 8)
+            sig = (dataoff, datasize)
+            break
+        off += cmdsize
+    if not sig:
+        return None
+
+    blob = d[sig[0]: sig[0] + sig[1]]
+    if len(blob) < 12:
+        return None
+    magic, _length, count = struct.unpack_from(">III", blob, 0)
+    if magic != CSMAGIC_EMBEDDED_SIGNATURE:
+        return None
+
+    for i in range(count):
+        btype, boff = struct.unpack_from(">II", blob, 12 + i * 8)
+        if boff + 8 > len(blob):
+            continue
+        bmagic = struct.unpack_from(">I", blob, boff)[0]
+        if bmagic != CSMAGIC_ENTITLEMENTS:
+            continue
+        plen = struct.unpack_from(">I", blob, boff + 4)[0]
+        xml = blob[boff + 8: boff + 8 + plen].decode("utf-8", "replace")
+        # blob 尾部会带上 wrapper 的尾巴（形如 "锟斤拷qr"），截到 </plist> 为止
+        idx = xml.rfind("</plist>")
+        if idx >= 0:
+            xml = xml[: idx + len("</plist>")] + "\n"
+        return xml
+    return None
+
+
+def strip_stale_signature(bundle_dir: str) -> int:
+    """删掉已经失效的 _CodeSignature 目录。
+
+    注入 dylib 改动了二进制，原 CodeResources 里记录的文件哈希全部对不上，
+    留着反而会让重签流程报错；这里直接删掉，让 ldid / TrollStore 重新生成。
+    """
+    removed = 0
+    for root, dirs, _files in os.walk(bundle_dir):
+        for d in list(dirs):
+            if d == "_CodeSignature":
+                shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                dirs.remove(d)
+                removed += 1
+    if removed:
+        print("[*] 已移除 %d 处失效的 _CodeSignature" % removed)
+    return removed
 
 
 def process_bundle(bundle: str, dylib_path: str, out_dir: Optional[str], dry_run: bool) -> int:

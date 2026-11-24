@@ -151,7 +151,7 @@ com.apple.security.application-groups = [group.com.enjoyio.floaty]
 
 ### 2.5 完整流程
 
-一条命令搞定解包 → 放 dylib → 注入两个二进制 → 重打包：
+一条命令搞定解包 → 放 dylib → 注入两个二进制 → 抠出原 entitlements → 清理失效签名 → 重打包：
 
 ```bash
 python unlock/package_unlocked_ipa.py \
@@ -159,6 +159,14 @@ python unlock/package_unlocked_ipa.py \
   --dylib FloatyUnlock.dylib \
   --out floaty-unlocked.ipa
 ```
+
+脚本会额外在 `Payload/floaty.app/_unlock/` 下产出：
+
+| 文件 | 作用 |
+|---|---|
+| `floaty.entitlements.plist` | 主二进制的原始 entitlements（含 App Group） |
+| `floatyLiveActivity.entitlements.plist` | 扩展的原始 entitlements |
+| `resign.sh` | 一键 `ldid` 假签脚本（**纯 ASCII**，设备端 `/bin/sh` 不会因编码炸掉） |
 
 等价的手动步骤：
 
@@ -205,6 +213,10 @@ cd unpacked && zip -qry floaty-unlocked.ipa Payload
 > **注意 2**：dylib 的 `install_name` 与写进 `LC_LOAD_DYLIB` 的路径**必须字面一致**，否则 dyld 加载时会因为路径不匹配而失败。CI 里已经统一成 `@executable_path/Frameworks/FloatyUnlock.dylib`。
 >
 > **注意 3**：`--out unpacked/patched` 是补丁器输出目录；dylib 是在**第 3 步**放进原 `Frameworks/` 的，补丁器会把这整个 bundle 复制到 `--out`，所以两份 dylib 都会跟着过去。
+>
+> **注意 4（顺序很重要）**：原始 entitlements **必须在打补丁之前**抠出来。补丁器会把 `LC_CODE_SIGNATURE` 的 `dataoff` / `datasize` 清零（改了头部原签名必然失效），之后再抠就什么都找不到了。
+>
+> **注意 5**：注入后原 `_CodeSignature/CodeResources` 里记录的文件哈希全部对不上，**必须删掉**（脚本自动做），否则重签流程会因为资源哈希不匹配而失败。
 
 ### 2.6 怎么确认 dylib 生效
 
@@ -270,7 +282,24 @@ Payload/floaty.app/PlugIns/floatyLiveActivity.appex/floatyLiveActivity
                                                        injected=True  cryptid=1
 ```
 
+```
+Payload/floaty.app/_unlock/floaty.entitlements.plist
+Payload/floaty.app/_unlock/floatyLiveActivity.entitlements.plist
+Payload/floaty.app/_unlock/resign.sh
+```
+
 `cryptid` 保持 1 意味着 **FairPlay 加密段一个字节都没动**，App 仍然是官方加密版本、不会因为改了文件而崩溃。
+
+与原版 IPA 的逐字节对比：
+
+| 项 | 原版 | 解锁版 |
+|---|---|---|
+| 主二进制大小 | 18869040 | 18869040（不变） |
+| 变化字节数 | — | **59**，全部 `< 0x4000`（FairPlay 区外） |
+| `ncmds` | 79 | 80（多一条 `LC_LOAD_DYLIB`） |
+| `dylib` 依赖数 | 59 | 60 |
+| bundle 文件数 | 100 | 103（+2 份 dylib，+3 个 `_unlock/` 文件） |
+| `_CodeSignature` | 2 处 | 0 处（已清理，待重签） |
 
 ---
 

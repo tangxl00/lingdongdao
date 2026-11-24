@@ -10,12 +10,17 @@ test_floaty_patcher.py — floaty_patcher 自测（不依赖真实 IPA）
   4. 空白不足时正确报错
   5. 重复注入幂等（检测到已存在就跳过）
   6. LC_CODE_SIGNATURE 被清零
+  7. 从代码签名里抠出 entitlements plist
+  8. 清理失效的 _CodeSignature 目录
 """
 
 from __future__ import annotations
 
+import os
+import shutil
 import struct
 import sys
+import tempfile
 
 from floaty_patcher import (
     LC_CODE_SIGNATURE,
@@ -24,6 +29,8 @@ from floaty_patcher import (
     LC_SEGMENT_64,
     MachO,
     MachOError,
+    extract_entitlements,
+    strip_stale_signature,
 )
 
 
@@ -103,6 +110,23 @@ def build_fake_macho(
 FAILED = []
 
 
+def build_code_signature(entitlements_xml: str) -> bytes:
+    """构造一个最小 CodeSignature superblob，里面放一份 entitlements。
+
+    结构（全部大端）：
+      SuperBlob(0xfade0cc0) : length, count, [type, offset] * count
+        -> EntitlementsBlob(0xfade7171) : length, <xml bytes>
+    """
+    xml = entitlements_xml.encode("utf-8")
+    ent_blob = struct.pack(">II", 0xFADE7171, 8 + len(xml)) + xml
+    ent_off = 12 + 8  # superblob header(12) + one index entry(8)
+    total = ent_off + len(ent_blob)
+    out = struct.pack(">III", 0xFADE0CC0, total, 1)
+    out += struct.pack(">II", 5, ent_off)
+    out += ent_blob
+    return out
+
+
 def check(name: str, cond: bool, detail: str = "") -> None:
     if cond:
         print("  PASS  %s" % name)
@@ -170,6 +194,53 @@ def main() -> int:
         check("非 Mach-O 抛 MachOError", False, "没有抛异常")
     except MachOError:
         check("非 Mach-O 抛 MachOError", True)
+
+    print("== 7. 提取 entitlements ==")
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<plist version="1.0"><dict>'
+        "<key>application-identifier</key><string>9GAL39B66Y.com.enjoyio.floaty</string>"
+        "<key>com.apple.security.application-groups</key>"
+        "<array><string>group.com.enjoyio.floaty</string></array>"
+        "</dict></plist>"
+    )
+    tmpdir = tempfile.mkdtemp(prefix="floaty-patcher-test-")
+    try:
+        # 造一个带真实签名 blob 的 Mach-O
+        raw = bytearray(build_fake_macho(total_size=0x8000))
+        m = MachO(bytes(raw))
+        sigoff = m.code_sig["dataoff"]
+        sigsize = m.code_sig["datasize"]
+        blob = build_code_signature(xml)
+        # 签名区从 0x7000 起，给它留够空间
+        raw[sigoff: sigoff + len(blob)] = blob
+        # 把 LC_CODE_SIGNATURE 的 datasize 改成 blob 实际长度
+        struct.pack_into("<II", raw, m.code_sig["off"] + 8, sigoff, len(blob))
+        sig_path = os.path.join(tmpdir, "floaty")
+        with open(sig_path, "wb") as fh:
+            fh.write(bytes(raw))
+
+        got = extract_entitlements(sig_path)
+        check("提取到 entitlements", got is not None)
+        check("含 application-identifier", got and "com.enjoyio.floaty" in got, repr(got))
+        check("含 App Group", got and "group.com.enjoyio.floaty" in got, repr(got))
+        check("以 </plist> 结尾", got and got.rstrip().endswith("</plist>"), repr(got[-40:] if got else None))
+        check("没有 blob 尾巴", got and "qr" not in got.split("</plist>")[-1], repr(got[-40:] if got else None))
+
+        print("== 8. 清理失效签名目录 ==")
+        bundle = os.path.join(tmpdir, "floaty.app")
+        os.makedirs(os.path.join(bundle, "_CodeSignature"))
+        with open(os.path.join(bundle, "_CodeSignature", "CodeResources"), "w") as fh:
+            fh.write("stale")
+        n = strip_stale_signature(bundle)
+        check("删除 1 处 _CodeSignature", n == 1, str(n))
+        check(
+            "目录已不存在",
+            not os.path.exists(os.path.join(bundle, "_CodeSignature")),
+        )
+        check("bundle 其它内容保留", os.path.isdir(bundle))
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
     print()
     if FAILED:

@@ -38,10 +38,23 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from typing import List, Tuple
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "patcher"))
 
-from floaty_patcher import MachO, find_macho_files, process_binary  # noqa: E402
+from floaty_patcher import (  # noqa: E402
+    MachO,
+    extract_entitlements,
+    find_macho_files,
+    process_binary,
+    strip_stale_signature,
+)
 
 DEFAULT_DYLIB_PATH = "@executable_path/Frameworks/FloatyUnlock.dylib"
 
@@ -135,6 +148,52 @@ def repack(payload_dir: str, out_ipa: str) -> None:
     print("[*] 完成：%.2f MB" % (os.path.getsize(out_ipa) / 1024 / 1024))
 
 
+def dump_entitlements(app_dir: str, out_dir: str) -> List[Tuple[str, str]]:
+    """把每个可执行文件的原始 entitlements 抠出来，写成 ldid 可用的 plist。
+
+    返回 [(相对路径, entitlements 文件路径), ...]
+    """
+    out: List[Tuple[str, str]] = []
+    os.makedirs(out_dir, exist_ok=True)
+    for b in find_macho_files(app_dir, exclude=["FloatyUnlock.dylib"]):
+        xml = extract_entitlements(b)
+        if not xml:
+            continue
+        name = os.path.basename(b) + ".entitlements.plist"
+        dst = os.path.join(out_dir, name)
+        with open(dst, "w", encoding="utf-8") as fh:
+            fh.write(xml)
+        rel = os.path.relpath(b, app_dir)
+        out.append((rel, dst))
+        print("[*] entitlements -> %s (%s)" % (os.path.basename(dst), rel))
+    return out
+
+
+def write_ldid_script(app_dir: str, ent_list: List[Tuple[str, str]], out_path: str) -> None:
+    """生成一份可直接在设备上跑的 ldid 假签脚本。
+
+    脚本内容刻意保持纯 ASCII：设备端 /bin/sh 与各种编辑器的编码环境不可控，
+    中文注释可能在传输中被破坏，导致 shell 语法出错。
+    """
+    lines = [
+        "#!/bin/sh",
+        "# Auto-generated: re-sign Floaty binaries, preserving original entitlements.",
+        "# The original entitlements contain group.com.enjoyio.floaty,",
+        "# which is required for the Lock Screen / Live Activity board.",
+        "set -e",
+        'cd "$(dirname "$0")"',
+        "",
+    ]
+    for rel, ent in ent_list:
+        ent_name = os.path.basename(ent)
+        lines.append('ldid -S"%s" "%s"' % (ent_name, rel.replace(os.sep, "/")))
+    lines.append('echo "re-sign done"')
+    with open(out_path, "w", encoding="ascii", newline="\n") as fh:
+        fh.write("\n".join(lines) + "\n")
+    os.chmod(out_path, 0o755)
+    print("[*] 假签脚本 -> %s" % out_path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把原版 Floaty IPA 打包成已注入解锁 dylib 的 IPA")
     ap.add_argument("--ipa", required=True, help="原版 IPA 路径")
@@ -153,16 +212,28 @@ def main() -> int:
     try:
         app_dir = extract(args.ipa, workdir)
         print("[*] app = %s" % app_dir)
+
+        # 注意顺序：必须先抠原始 entitlements —— 打补丁会把 LC_CODE_SIGNATURE 清零，
+        # 之后再抠就什么都找不到了
+        ent_list = dump_entitlements(app_dir, os.path.join(app_dir, "_unlock"))
+        if not ent_list:
+            die("没能从原版二进制里提取 entitlements，无法安全重签")
+
         install_dylib(app_dir, args.dylib)
         bad = patch_binaries(app_dir, args.dylib_install_path)
         if bad:
             die("有 %d 个文件处理失败，未打包" % bad)
+
+        # 注入后原签名必然失效：清掉旧签名目录，并生成 ldid 假签脚本
+        strip_stale_signature(app_dir)
+        write_ldid_script(app_dir, ent_list, os.path.join(app_dir, "_unlock", "resign.sh"))
+
         payload_dir = os.path.join(workdir, "Payload")
         repack(payload_dir, args.out)
         print("")
         print("下一步（越狱设备）：")
         print("  1) 用 TrollStore 安装本 IPA（会自动假签）")
-        print("  2) 或 ldid 假签（需保留原 entitlements，含 group.com.enjoyio.floaty）")
+        print("  2) 或手动 ldid 假签：Payload/floaty.app/_unlock/resign.sh 已在包内")
         print("  3) 打开 App，App 沙盒 tmp/floaty_unlock_hits.txt 有记录即说明 dylib 生效")
         return 0
     finally:
