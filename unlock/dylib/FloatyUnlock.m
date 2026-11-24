@@ -192,6 +192,11 @@ static NSData *FURewriteIfNeeded(NSURL *url, NSData *data) {
     return FURewriteBody(data);
 }
 
+#pragma mark - 前向声明（测试入口在 swizzle 基础设施之前定义）
+
+static void FUInstall(void);
+static IMP FUOrigIMPForInstance(id self, SEL sel);
+
 #pragma mark - 测试入口（test_rewrite.m 用）
 
 NSData *FUTestRewriteBody(NSData *data) {
@@ -200,6 +205,18 @@ NSData *FUTestRewriteBody(NSData *data) {
 
 BOOL FUTestShouldRewriteURL(NSURL *url) {
     return FUShouldRewriteURL(url);
+}
+
+/// 装一次 swizzle（供单测在 macOS 宿主上验证 hook 链路）
+void FUTestInstall(void) {
+    FUInstall();
+}
+
+/// 取某个类的原始 IMP（供单测验证 class cluster 回溯是否正确）
+void *FUTestOrigIMPForInstance(id instance, const char *selectorName) {
+    SEL sel = NSSelectorFromString(selectorName);
+    IMP imp = FUOrigIMPForInstance(instance, sel);
+    return (void *)imp;
 }
 
 /// 命中时写一个标记文件，方便用户确认 dylib 真的生效了
@@ -224,6 +241,8 @@ static void FUMarkHit(NSString *tag) {
 
 #pragma mark - swizzle 基础设施
 
+static void FUInstall(void);
+
 /// 原 IMP 登记表：key = "<class ptr>|<selector>"，value = IMP
 static NSMutableDictionary *FUOrigIMPs(void) {
     static NSMutableDictionary *table = nil;
@@ -243,42 +262,115 @@ static IMP FUOrigIMP(Class cls, SEL sel) {
     return v ? (IMP)v.pointerValue : NULL;
 }
 
+/// 沿实例的真实类链向上找原始 IMP。
+///
+/// NSURLSession 是 class cluster：真实实例的类是私有子类 __NSCFURLSession，
+/// 而我们 swizzle 的是公开类 NSURLSession。若只查 object_getClass(self)
+/// 就会查不到记录 → 拿到 NULL → 请求被吞掉、异步调用永久挂起。
+/// 因此必须沿 superclass 链回溯。
+static IMP FUOrigIMPForInstance(id self, SEL sel) {
+    for (Class c = object_getClass(self); c != Nil; c = class_getSuperclass(c)) {
+        IMP imp = FUOrigIMP(c, sel);
+        if (imp != NULL) {
+            return imp;
+        }
+    }
+    return NULL;
+}
+
+/// L1 / L2 单独存一份原始 IMP —— 安装时抓一次，之后不再查表，
+/// 彻底避开 class cluster 与「二次安装抓到自己的 replacement」两个坑。
+static IMP gOrigDataTaskWithRequest = NULL;
+static IMP gOrigDataTaskWithURL = NULL;
+
+/// 沿类链向上找**真正的原始实现**（跳过已经被我们换成 replacement 的那份）。
+///
+/// 必须逐级用 class_copyMethodList 只看「本级自己声明的方法」：
+/// class_getInstanceMethod 返回的可能是父类继承来的方法，而父类可能
+/// 已经被 swizzle 过（IMP == replacement），此时若直接取它的 IMP 就会
+/// 把 replacement 当成原实现，调用后无限递归。
+static IMP FUFindRealIMP(Class cls, SEL sel, IMP replacement) {
+    for (Class c = cls; c != Nil; c = class_getSuperclass(c)) {
+        unsigned int count = 0;
+        Method *ms = class_copyMethodList(c, &count);
+        IMP found = NULL;
+        if (ms != NULL) {
+            for (unsigned int i = 0; i < count; i++) {
+                if (method_getName(ms[i]) == sel) {
+                    found = method_getImplementation(ms[i]);
+                    break;
+                }
+            }
+            free(ms);
+        }
+        if (found != NULL && found != replacement) {
+            return found;
+        }
+    }
+    return NULL;
+}
+
+/// 取某个方法签名的 type encoding（沿类链找第一个声明者）
+static const char *FUTypeEncoding(Class cls, SEL sel) {
+    for (Class c = cls; c != Nil; c = class_getSuperclass(c)) {
+        unsigned int count = 0;
+        Method *ms = class_copyMethodList(c, &count);
+        const char *enc = NULL;
+        if (ms != NULL) {
+            for (unsigned int i = 0; i < count; i++) {
+                if (method_getName(ms[i]) == sel) {
+                    enc = method_getTypeEncoding(ms[i]);
+                    break;
+                }
+            }
+            free(ms);
+        }
+        if (enc != NULL) {
+            return enc;
+        }
+    }
+    return NULL;
+}
+
 /// 把 sel 在 cls 上的实现替换成 replacement。
-/// 若该方法其实继承自父类，则在 cls 上新增一个 override，而不是改父类。
+///
+/// 用 class_replaceMethod：
+///   * cls 自己声明过 → 直接换实现
+///   * cls 继承来的    → 在 cls 上新增一个 override（父类那份不受影响）
+/// 这样无论类链怎么排，每个类都有自己独立的 entry，不会出现
+/// 「子类拿到父类的 replacement」导致调用递归或回调丢失。
 static void FUSwizzle(Class cls, SEL sel, IMP replacement) {
     if (cls == Nil) {
         return;
     }
-    Method m = class_getInstanceMethod(cls, sel);
-    if (m == NULL) {
-        return;
-    }
-    if (class_getMethodImplementation(cls, sel) == replacement) {
+    if (FUOrigIMPs()[FUKey(cls, sel)] != nil) {
         return; // 已经装过了
     }
-    IMP orig = method_getImplementation(m);
-    if (orig == replacement) {
+    IMP orig = FUFindRealIMP(cls, sel, replacement);
+    if (orig == NULL) {
+        return;
+    }
+    const char *types = FUTypeEncoding(cls, sel);
+    if (types == NULL) {
         return;
     }
     FUOrigIMPs()[FUKey(cls, sel)] = [NSValue valueWithPointer:orig];
-
-    // 自己实现 → 直接换实现；继承来的 → 在子类上 override
-    const char *types = method_getTypeEncoding(m);
-    if (!class_addMethod(cls, sel, replacement, types)) {
-        method_setImplementation(m, replacement);
-    }
+    class_replaceMethod(cls, sel, replacement, types);
 }
 
 #pragma mark - L1 / L2：completion handler 型
 
 static NSURLSessionDataTask *FUDataTaskWithRequest(id self, SEL _cmd, NSURLRequest *request,
                                                    void (^handler)(NSData *, NSURLResponse *, NSError *)) {
+    IMP orig = FUOrigIMPForInstance(self, @selector(dataTaskWithRequest:completionHandler:));
+    if (orig == NULL || orig == (IMP)FUDataTaskWithRequest) {
+        orig = gOrigDataTaskWithRequest;
+    }
+    if (orig == NULL) {
+        return nil;
+    }
+
     if (handler == nil) {
-        Class cls = object_getClass(self);
-        IMP orig = FUOrigIMP(cls, @selector(dataTaskWithRequest:completionHandler:));
-        if (orig == NULL) {
-            return nil;
-        }
         typedef NSURLSessionDataTask * (*Orig)(id, SEL, NSURLRequest *,
                                                void (^)(NSData *, NSURLResponse *, NSError *));
         return ((Orig)orig)(self, _cmd, request, handler);
@@ -297,11 +389,6 @@ static NSURLSessionDataTask *FUDataTaskWithRequest(id self, SEL _cmd, NSURLReque
             handler(newData ?: data, response, error);
         };
 
-    Class cls = object_getClass(self);
-    IMP orig = FUOrigIMP(cls, @selector(dataTaskWithRequest:completionHandler:));
-    if (orig == NULL) {
-        return nil;
-    }
     typedef NSURLSessionDataTask * (*Orig)(id, SEL, NSURLRequest *,
                                            void (^)(NSData *, NSURLResponse *, NSError *));
     return ((Orig)orig)(self, _cmd, request, wrapped);
@@ -309,12 +396,15 @@ static NSURLSessionDataTask *FUDataTaskWithRequest(id self, SEL _cmd, NSURLReque
 
 static NSURLSessionDataTask *FUDataTaskWithURL(id self, SEL _cmd, NSURL *url,
                                                void (^handler)(NSData *, NSURLResponse *, NSError *)) {
+    IMP orig = FUOrigIMPForInstance(self, @selector(dataTaskWithURL:completionHandler:));
+    if (orig == NULL || orig == (IMP)FUDataTaskWithURL) {
+        orig = gOrigDataTaskWithURL;
+    }
+    if (orig == NULL) {
+        return nil;
+    }
+
     if (handler == nil) {
-        Class cls = object_getClass(self);
-        IMP orig = FUOrigIMP(cls, @selector(dataTaskWithURL:completionHandler:));
-        if (orig == NULL) {
-            return nil;
-        }
         typedef NSURLSessionDataTask * (*Orig)(id, SEL, NSURL *,
                                                void (^)(NSData *, NSURLResponse *, NSError *));
         return ((Orig)orig)(self, _cmd, url, handler);
@@ -333,11 +423,6 @@ static NSURLSessionDataTask *FUDataTaskWithURL(id self, SEL _cmd, NSURL *url,
             handler(newData ?: data, response, error);
         };
 
-    Class cls = object_getClass(self);
-    IMP orig = FUOrigIMP(cls, @selector(dataTaskWithURL:completionHandler:));
-    if (orig == NULL) {
-        return nil;
-    }
     typedef NSURLSessionDataTask * (*Orig)(id, SEL, NSURL *,
                                            void (^)(NSData *, NSURLResponse *, NSError *));
     return ((Orig)orig)(self, _cmd, url, wrapped);
@@ -369,8 +454,7 @@ static void FUReceiveData(id self, SEL _cmd, NSURLSession *session, NSURLSession
     NSURL *url = task.originalRequest.URL ?: task.currentRequest.URL;
     if (!FUShouldRewriteURL(url)) {
         // 非 RevenueCat 流量：原样透传，不缓存、不拦截
-        Class cls = object_getClass(self);
-        IMP orig = FUOrigIMP(cls, @selector(URLSession:dataTask:didReceiveData:));
+        IMP orig = FUOrigIMPForInstance(self, @selector(URLSession:dataTask:didReceiveData:));
         if (orig != NULL) {
             ((void (*)(id, SEL, NSURLSession *, NSURLSessionDataTask *, NSData *))orig)(
                 self, _cmd, session, task, data);
@@ -395,7 +479,6 @@ static void FUReceiveData(id self, SEL _cmd, NSURLSession *session, NSURLSession
 
 static void FUCompleteWithError(id self, SEL _cmd, NSURLSession *session,
                                 NSURLSessionDataTask *task, NSError *error) {
-    Class cls = object_getClass(self);
     NSValue *key = [NSValue valueWithNonretainedObject:task];
 
     NSLock *lock = FULock();
@@ -409,25 +492,18 @@ static void FUCompleteWithError(id self, SEL _cmd, NSURLSession *session,
     if (acc.length > 0) {
         NSURL *url = task.originalRequest.URL ?: task.currentRequest.URL;
         NSData *newData = FURewriteIfNeeded(url, acc);
-        if (newData != nil) {
-            FUMarkHit(@"delegate");
-            IMP origData = FUOrigIMP(cls, @selector(URLSession:dataTask:didReceiveData:));
-            if (origData != NULL) {
-                ((void (*)(id, SEL, NSURLSession *, NSURLSessionDataTask *, NSData *))origData)(
-                    self, @selector(URLSession:dataTask:didReceiveData:),
-                    session, task, newData);
+        IMP origData = FUOrigIMPForInstance(self, @selector(URLSession:dataTask:didReceiveData:));
+        if (origData != NULL) {
+            if (newData != nil) {
+                FUMarkHit(@"delegate");
             }
-        } else {
-            IMP origData = FUOrigIMP(cls, @selector(URLSession:dataTask:didReceiveData:));
-            if (origData != NULL) {
-                ((void (*)(id, SEL, NSURLSession *, NSURLSessionDataTask *, NSData *))origData)(
-                    self, @selector(URLSession:dataTask:didReceiveData:),
-                    session, task, acc);
-            }
+            ((void (*)(id, SEL, NSURLSession *, NSURLSessionDataTask *, NSData *))origData)(
+                self, @selector(URLSession:dataTask:didReceiveData:),
+                session, task, newData ?: acc);
         }
     }
 
-    IMP origComplete = FUOrigIMP(cls, @selector(URLSession:dataTask:didCompleteWithError:));
+    IMP origComplete = FUOrigIMPForInstance(self, @selector(URLSession:dataTask:didCompleteWithError:));
     if (origComplete != NULL) {
         ((void (*)(id, SEL, NSURLSession *, NSURLSessionDataTask *, NSError *))origComplete)(
             self, @selector(URLSession:dataTask:didCompleteWithError:),
@@ -439,7 +515,19 @@ static void FUCompleteWithError(id self, SEL _cmd, NSURLSession *session,
 
 static void FUInstall(void) {
     // L1 / L2 —— NSURLSession 的 completion handler 型
+    //
+    // 先把「真正的原始 IMP」抓一次存到全局，后面 swizzle 后的调用直接用它，
+    // 不再回头查表 —— 避免二次安装时把 replacement 当成原实现造成无限递归。
     Class sessionCls = [NSURLSession class];
+    if (gOrigDataTaskWithRequest == NULL) {
+        gOrigDataTaskWithRequest = FUFindRealIMP(
+            sessionCls, @selector(dataTaskWithRequest:completionHandler:), (IMP)FUDataTaskWithRequest);
+    }
+    if (gOrigDataTaskWithURL == NULL) {
+        gOrigDataTaskWithURL = FUFindRealIMP(
+            sessionCls, @selector(dataTaskWithURL:completionHandler:), (IMP)FUDataTaskWithURL);
+    }
+
     FUSwizzle(sessionCls, @selector(dataTaskWithRequest:completionHandler:),
               (IMP)FUDataTaskWithRequest);
     FUSwizzle(sessionCls, @selector(dataTaskWithURL:completionHandler:),

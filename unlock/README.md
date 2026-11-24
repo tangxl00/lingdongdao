@@ -112,6 +112,19 @@ RevenueCat 的 `CustomerInfo` / `EntitlementInfo` 都是 Swift struct，没有 O
 
 改写内容与路线 A 完全一致：`is_active=true`、`will_renew=false`、`expires_date=grace_period_expires_date=2099-12-31`、摘掉 `verification` / `verification_data`、填 `active_entitlements`。
 
+#### 踩过的坑：NSURLSession 是 class cluster
+
+`[NSURLSession sharedSession]` 的真实实例类是**私有子类** `__NSCFURLSession`，而 swizzle 打的是**公开类** `NSURLSession`。第一版代码用 `object_getClass(self)` 直接查原 IMP 表 —— 查的是私有子类，永远查不到 → 拿到 `NULL` → **所有网络请求被直接吞掉，App 联网全断、连 Pro 状态都同步不回来**。
+
+修法有两条，都已落地：
+
+| 问题 | 修法 |
+|---|---|
+| 找不到原 IMP（class cluster） | `FUOrigIMPForInstance()` 沿 `object_getClass(self)` 的 superclass 链逐级回溯，找到真正声明该方法的类 |
+| 二次安装把 replacement 当成原实现 → 无限递归 | `FUFindRealIMP()` 用 `class_copyMethodList` 只看**本级自己声明**的方法，跳过 `IMP == replacement` 的那份；L1/L2 的原始 IMP 在安装时抓一次存进 `gOrigDataTaskWithRequest` / `gOrigDataTaskWithURL`，之后不再查表 |
+
+`unlock/dylib/test_rewrite.m` 的第 6 组测试专门覆盖这个回归：装上 swizzle 后对 `127.0.0.1:1` 发一个真实请求，断言 **task 对象不为 nil、completion handler 在 5 秒内被回调、回调带回 error** —— 链路断掉这条测试就会红。
+
 ### 2.3 为什么补丁能打在加密二进制上
 
 原版主二进制和扩展都是 FairPlay 加密（`cryptid=1`），`__TEXT` 是密文，**代码一个字节都改不了**。但 Mach-O 的 **load commands 区在 `__TEXT` 之前**，而且那段是明文 padding：
@@ -265,7 +278,9 @@ unlock/
 
 CI：`.github/workflows/unlock-dylib.yml` —— 在 macos-15 上编 arm64 dylib + 跑两套单测 + 产出 dylib artifact。
 
-最近一次成功的 run：**45320854541**（SHA `2f5d610`），artifact `FloatyUnlock-dylib`（dylib 本体 74312 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
+最近一次成功的 run：**45321839202**（SHA `1f6791d`），artifact id `14887792124`，name `FloatyUnlock-dylib`（dylib 本体 74312 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
+
+> **务必用 CI 产出的 dylib**。本地 macOS 手工编出来的 dylib，`install_name` 默认会是 `@rpath/FloatyUnlock.dylib`，与写进 `LC_LOAD_DYLIB` 的 `@executable_path/...` 字面不一致，dyld 加载时会直接失败。CI 的 workflow 已经把 `-install_name` 固定死了。
 
 ---
 

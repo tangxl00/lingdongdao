@@ -29,6 +29,8 @@ extern "C" {
 
 extern NSData *FUTestRewriteBody(NSData *data);
 extern BOOL FUTestShouldRewriteURL(NSURL *url);
+extern void FUTestInstall(void);
+extern void *FUTestOrigIMPForInstance(id instance, const char *selectorName);
 
 #ifdef __cplusplus
 }
@@ -109,6 +111,42 @@ int main(void) {
               !FUTestShouldRewriteURL([NSURL URLWithString:@"https://example.com/v1/subscribers/abc"]));
         check(@"非 revenuecat 域名(前缀伪装)不命中",
               !FUTestShouldRewriteURL([NSURL URLWithString:@"https://revenuecat.com.evil.net/v1/subscribers/a"]));
+
+        printf("== 6. swizzle 装得上，且 class cluster 能找回原始 IMP ==\n");
+        FUTestInstall();
+        NSURLSession *sess = [NSURLSession sharedSession];
+        check(@"session 非空", sess != nil);
+
+        // 关键回归：NSURLSession 是 class cluster，实例的真实类是私有子类
+        // （macOS 上是 __NSCFURLSession / iOS 上是 __NSCFURLSession）。
+        // 如果只按 object_getClass(self) 查表就会查不到 → 原始 IMP 为 NULL →
+        // 所有网络请求被吞掉、App 联网全断。这里必须能沿类链回溯到。
+        void *origReq = FUTestOrigIMPForInstance(sess, "dataTaskWithRequest:completionHandler:");
+        void *origURL = FUTestOrigIMPForInstance(sess, "dataTaskWithURL:completionHandler:");
+        check(@"dataTaskWithRequest:completionHandler: 能找回原始 IMP", origReq != NULL);
+        check(@"dataTaskWithURL:completionHandler: 能找回原始 IMP", origURL != NULL);
+        check(@"两个 IMP 不相同（确实是两个方法）", origReq != origURL);
+
+        // 走一次真实的 completion-handler 型调用，验证请求没有被吞掉。
+        // 命中本地不可达地址 → 期望走 error 回调，而不是永远挂起。
+        __block BOOL called = NO;
+        __block NSError *capturedErr = nil;
+        NSURL *dead = [NSURL URLWithString:@"http://127.0.0.1:1/never"];
+        NSURLSessionDataTask *t = [sess dataTaskWithURL:dead
+                                    completionHandler:^(NSData *d, NSURLResponse *r, NSError *e) {
+            called = YES;
+            capturedErr = e;
+        }];
+        check(@"dataTaskWithURL: 返回了 task 对象（没被吞）", t != nil);
+        [t resume];
+        // 等回调（最多 5 秒）
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5.0];
+        while (!called && [deadline timeIntervalSinceNow] > 0) {
+            [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+                                     beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+        }
+        check(@"completion handler 确实被回调了（链路没断）", called);
+        check(@"回调带回了 error（说明请求真的发出去了）", capturedErr != nil);
 
         printf("\n");
         if (gFailed > 0) {
