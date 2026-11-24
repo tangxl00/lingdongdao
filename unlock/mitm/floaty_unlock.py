@@ -208,6 +208,12 @@ def _target_host(flow: http.HTTPFlow) -> str:
 class FloatyUnlock:
     """把 RevenueCat 的权益响应改写成"永久 Pro"。"""
 
+    # 在 flow 上缓存"这条流是不是 RevenueCat 权益请求"。
+    # 原因：request 阶段看到的 Host 是客户端原始 Host，而 response 阶段
+    # mitmproxy 可能已经把它改写过（reverse 模式、--map-remote 都会改 Host），
+    # 只靠 response 阶段重新判定会漏掉这类流。
+    META_KEY = "floaty_unlock_rc_match"
+
     def load(self, loader):  # noqa: D401 - mitmproxy hook
         ctx.log.info("[floaty_unlock] 已加载：拦截 RevenueCat 订阅响应并授予永久 Pro")
 
@@ -216,12 +222,16 @@ class FloatyUnlock:
         path = flow.request.path or ""
         flow.request.headers["X-Floaty-Unlock"] = "1"
         if is_revenuecat_request(host, path):
+            flow.metadata[self.META_KEY] = True
             ctx.log.info("[floaty_unlock] 命中 RevenueCat 请求: %s%s" % (host, path))
 
     def response(self, flow: http.HTTPFlow) -> None:
-        host = _target_host(flow)
         path = flow.request.path or ""
-        if not is_revenuecat_request(host, path):
+        matched = bool(flow.metadata.get(self.META_KEY))
+        if not matched:
+            host = _target_host(flow)
+            matched = is_revenuecat_request(host, path)
+        if not matched:
             return
 
         STATS["matched"] += 1

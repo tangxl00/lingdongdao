@@ -214,7 +214,7 @@ void FUTestInstall(void) {
 
 /// 取某个类的原始 IMP（供单测验证 class cluster 回溯是否正确）
 void *FUTestOrigIMPForInstance(id instance, const char *selectorName) {
-    SEL sel = NSSelectorFromString(selectorName);
+    SEL sel = NSSelectorFromString([NSString stringWithUTF8String:selectorName]);
     IMP imp = FUOrigIMPForInstance(instance, sel);
     return (void *)imp;
 }
