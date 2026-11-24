@@ -71,6 +71,24 @@ jobs:
           python3 unlock/patcher/test_floaty_patcher.py
 
       # ---------------------------------------------------------------
+      # 3b) MITM 插件单测 + 端到端 + HTTPS 链路
+      # ---------------------------------------------------------------
+      - name: Unit test (MITM plugin)
+        run: |
+          set -e
+          python3 unlock/mitm/test_floaty_unlock.py
+
+      - name: End-to-end test (MITM plugin + fake RevenueCat)
+        run: |
+          set -e
+          python3 unlock/mitm/e2e_test.py
+
+      - name: HTTPS path test (CONNECT + TLS + rewrite)
+        run: |
+          set -e
+          python3 unlock/mitm/test_https_path.py
+
+      # ---------------------------------------------------------------
       # 4) 用真实 Floaty IPA 端到端打补丁（从 Release 取原版 IPA）
       # ---------------------------------------------------------------
       - name: Patch real Floaty IPA (end-to-end)

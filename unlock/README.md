@@ -64,9 +64,29 @@ iPhone 侧：
 3. 打开浮现，等它同步一次订阅状态
 4. 回浮现设置页，应该显示**已是 Floaty Pro**（`You're on Floaty Pro`），自动添加开关也能打开
 
+> **第 2 步是 iOS 17+ 的硬性要求**：光"安装"证书不够，必须在
+> **设置 → 通用 → 关于本机 → 证书信任设置**里把 mitmproxy CA 的开关**手动打开**，
+> 否则系统不信任它，所有 HTTPS 连接直接失败（Safari 打不开网页、App 连不上网）。
+>
+> **如果不想装证书**：iOS 走的是 `http://` 明文时不需要证书，但浮现拉订阅状态用的是
+> `https://api.revenuecat.com`，所以**必须信任 CA**。
+
 ### 1.3 怎么确认真的生效了
 
-插件会给每个被改写的响应加一个 `X-Floaty-Unlock` 请求头，并在终端打印命中统计。也可以在 mitmproxy 界面里直接看被改写后的 JSON（`is_active: true`、`expires_date: 2099-12-31T23:59:59Z`）。
+插件会：
+
+- 在**请求**侧加一个 `X-Floaty-Unlock: 1` 头（只加在命中 RevenueCat 的流上）；
+- 在**响应**侧改写 JSON；
+- 在终端打印命中日志：
+
+```
+[floaty_unlock] 命中 RevenueCat 请求: api.revenuecat.com/v1/subscribers/<app_user_id>
+[floaty_unlock] 已改写响应，授予 1 个权益（累计 1 个）
+```
+
+也可以在 mitmproxy 界面里直接看被改写后的 JSON（`is_active: true`、`expires_date: 2099-12-31T23:59:59Z`）。
+
+**最直观的判据**：浮现 App 设置页会从「升级到 Pro」变成「**You're on Floaty Pro / 已是浮现会员**」，并且「短信自动添加」「邮件自动添加」开关变成可打开状态。
 
 ### 1.4 插件行为细节
 
@@ -74,15 +94,56 @@ iPhone 侧：
 - **不改** `/v1/products` / `/v1/offerings` —— 否则付费页的套餐列表会显示不出来。
 - 同时处理三种响应外壳：顶层 flat、`subscriber`、`customer_info` / `subscriber_info`。
 - 改写后重设 `Content-Length`、剥掉 `ETag` / `X-Signature`。
+- **命中状态缓存在 `flow.metadata` 上**（`floaty_unlock_rc_match`）。
+  原因：`request` 阶段看到的 `Host` 是客户端原始 Host，而 `response` 阶段 mitmproxy
+  可能已经把它改写过（reverse 模式、`--map-remote` 都会改 Host），
+  只在响应阶段重新判定会漏掉这类流。
 
 ### 1.5 自测
 
 ```bash
 python unlock/mitm/test_floaty_unlock.py   # 单元自测
 python unlock/mitm/e2e_test.py             # 端到端（真起 mitmdump + 假 RevenueCat）
+python unlock/mitm/test_https_path.py      # HTTPS 链路（CONNECT + TLS + 改写）
 ```
 
 `fake_revenuecat.py` 是一个本地假 RevenueCat 服务，用来在没有真机的情况下验证改写逻辑。
+
+`test_https_path.py` 复现的是 **iPhone 上真正发生的那条路**：
+`CONNECT → TLS 握手（信任我们的 CA）→ 发送真实 Host 头 + 真实路径 → 校验响应已改写`。
+为了不依赖真 RevenueCat 的 API Key，它用 `--map-remote` 把 `api.revenuecat.com`
+映射到本地假服务，**其余部分（CONNECT、TLS、证书、Host、路径、响应改写）与真机完全一致**。
+
+---
+
+## 1.6 本机实测记录（2026-11-24）
+
+在 Windows 宿主机上真起代理跑通，**没有真机也能确认整条链路是通的**：
+
+```powershell
+# 1) 起代理（监听 0.0.0.0，iPhone 用这个地址）
+mitmdump -s unlock/mitm/floaty_unlock.py --listen-host 0.0.0.0 --listen-port 8080 `
+         --set confdir=E:\work\floaty\mitmconf
+
+# 2) 起假 RevenueCat（可选，仅为了自测）
+python unlock/mitm/fake_revenuecat.py 8899
+```
+
+实测结果：
+
+| 检查项 | 结果 |
+|---|---|
+| 正向代理 CONNECT `api.revenuecat.com:443` | `HTTP/1.1 200 Connection established` |
+| 拦截到的证书 | `CN=*.revenuecat.com`，`issuer=mitmproxy` ← **证明流量已解密** |
+| 真实上游响应 | `HTTP/1.1 401 {"code":7225,"message":"Invalid API Key."}` ← **真服务器应答，MITM 有效** |
+| 改写后的 subscriber | `is_active=true`、`expires_date=2099-12-31T23:59:59Z`、`verification` 已摘除、`active_entitlements=["pro"]` |
+| `/v1/products` | 保持原样（未塞入 `is_active`） |
+| 非 RevenueCat host | 保持 `is_active=false`，`verification` 保留 |
+
+> 「Invalid API Key」说明请求**真的打到了 RevenueCat 的生产服务器**，只是没带 App 的
+> 真实 API Key（那个 Key 在 FairPlay 加密段里，本机拿不到，也不影响解锁 ——
+> 真机上 App 会自己带上）。
+
 
 ---
 
@@ -267,7 +328,8 @@ unlock/
 │   ├── floaty_unlock.py         ← mitmproxy 插件（主路线）
 │   ├── fake_revenuecat.py       ← 本地假 RevenueCat 服务（测试用）
 │   ├── test_floaty_unlock.py    ← 单元自测
-│   └── e2e_test.py              ← 端到端测试
+│   ├── e2e_test.py              ← 端到端测试（明文 HTTP）
+│   └── test_https_path.py       ← HTTPS 链路测试（CONNECT + TLS + 改写）
 ├── dylib/
 │   ├── FloatyUnlock.m           ← 注入式 dylib 源码
 │   └── test_rewrite.m           ← 逻辑单测（macOS 编译运行）
@@ -276,7 +338,9 @@ unlock/
     └── test_floaty_patcher.py   ← 补丁器自测
 ```
 
-CI：`.github/workflows/unlock-dylib.yml` —— 在 macos-15 上编 arm64 dylib + 跑两套单测 + 产出 dylib artifact。
+CI：`.github/workflows/unlock-dylib.yml` —— 在 macos-15 上编 arm64 dylib，
+并跑 **4 套测试**：ObjC 逻辑单测、补丁器单测、MITM 插件单测、
+MITM 端到端（明文 + HTTPS 链路），最后产出 dylib artifact。
 
 最近一次成功的 run：**45321839202**（SHA `1f6791d`），artifact id `14887792124`，name `FloatyUnlock-dylib`（dylib 本体 74312 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
 

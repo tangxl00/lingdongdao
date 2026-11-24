@@ -220,9 +220,10 @@ class FloatyUnlock:
     def request(self, flow: http.HTTPFlow) -> None:
         host = _target_host(flow)
         path = flow.request.path or ""
-        flow.request.headers["X-Floaty-Unlock"] = "1"
         if is_revenuecat_request(host, path):
             flow.metadata[self.META_KEY] = True
+            # 只给 RevenueCat 的请求打标记，避免污染其它站点日志。
+            flow.request.headers["X-Floaty-Unlock"] = "1"
             ctx.log.info("[floaty_unlock] 命中 RevenueCat 请求: %s%s" % (host, path))
 
     def response(self, flow: http.HTTPFlow) -> None:
