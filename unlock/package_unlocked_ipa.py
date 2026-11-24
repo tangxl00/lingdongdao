@@ -71,17 +71,32 @@ def extract(ipa: str, workdir: str) -> str:
 
 
 def install_dylib(app_dir: str, dylib_src: str) -> str:
-    frameworks = os.path.join(app_dir, "Frameworks")
-    os.makedirs(frameworks, exist_ok=True)
-    dst = os.path.join(frameworks, "FloatyUnlock.dylib")
-    shutil.copy2(dylib_src, dst)
-    print("[*] dylib -> %s" % dst)
-    return dst
+    """把 dylib 放进 App 和每个 appex 各自的 Frameworks/。
+
+    @executable_path 是「当前可执行文件所在目录」，主 App 和 appex 各自不同，
+    所以两份都要放，否则 appex 加载 dylib 时会找不到。
+    """
+    targets = [app_dir]
+    plugins_dir = os.path.join(app_dir, "PlugIns")
+    if os.path.isdir(plugins_dir):
+        for entry in os.listdir(plugins_dir):
+            p = os.path.join(plugins_dir, entry)
+            if entry.endswith(".appex") and os.path.isdir(p):
+                targets.append(p)
+
+    for t in targets:
+        frameworks = os.path.join(t, "Frameworks")
+        os.makedirs(frameworks, exist_ok=True)
+        dst = os.path.join(frameworks, "FloatyUnlock.dylib")
+        shutil.copy2(dylib_src, dst)
+        print("[*] dylib -> %s" % os.path.relpath(dst, app_dir))
+    return os.path.join(targets[0], "Frameworks", "FloatyUnlock.dylib")
 
 
 def patch_binaries(app_dir: str, dylib_install_path: str) -> int:
-    binaries = find_macho_files(app_dir)
-    print("[*] 找到 %d 个 Mach-O" % len(binaries))
+    # 我们注入进去的 dylib 本身不能再被注入一次自己
+    binaries = find_macho_files(app_dir, exclude=["FloatyUnlock.dylib"])
+    print("[*] 找到 %d 个 Mach-O（已跳过 FloatyUnlock.dylib）" % len(binaries))
     bad = 0
     for b in binaries:
         try:

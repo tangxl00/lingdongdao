@@ -43,7 +43,7 @@ jobs:
             -fobjc-arc \
             -O2 \
             -dynamiclib \
-            -install_name @rpath/FloatyUnlock.dylib \
+            -install_name @executable_path/Frameworks/FloatyUnlock.dylib \
             -framework Foundation \
             -o build/FloatyUnlock.dylib \
             unlock/dylib/FloatyUnlock.m

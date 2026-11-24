@@ -242,11 +242,18 @@ class MachO:
 # IPA / bundle 处理
 # ---------------------------------------------------------------------------
 
-def find_macho_files(bundle_dir: str) -> List[str]:
-    """找出 bundle 里所有 Mach-O 可执行文件。"""
+def find_macho_files(bundle_dir: str, exclude: Optional[List[str]] = None) -> List[str]:
+    """找出 bundle 里所有 Mach-O 可执行文件。
+
+    exclude：文件名黑名单（例如我们自己注入进去的 FloatyUnlock.dylib，
+    它不该再被注入一次自己）。
+    """
+    exclude = [os.path.basename(x) for x in (exclude or [])]
     out = []
     for root, _dirs, files in os.walk(bundle_dir):
         for f in files:
+            if f in exclude:
+                continue
             p = os.path.join(root, f)
             try:
                 if os.path.getsize(p) < 4096:
