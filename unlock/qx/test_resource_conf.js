@@ -45,10 +45,17 @@ const hostLines = txt.split("\n").filter((l) =>
 check("没有 hostname = 行", hostLines.length === 0, hostLines.join(" | "));
 
 // ---------------------------------------------------------------------------
-// 3. 注释风格：QX 只认 # ; // —— 有 /* */ 会解析失败
+// 3. 注释风格 + 纯 ASCII（QX 对非 ASCII 处理不稳定，中文注释可能触发解析错误）
 // ---------------------------------------------------------------------------
-console.log("== 3. 注释风格 ==");
+console.log("== 3. 注释风格与编码 ==");
 check("没有块注释 /* */", !/\/\*|\*\//.test(txt));
+const nonAscii = [...txt].filter((c) => c.charCodeAt(0) > 127);
+check("纯 ASCII（无中文/全角字符）", nonAscii.length === 0,
+      "发现 " + nonAscii.length + " 个非 ASCII 字符");
+const buf = fs.readFileSync(confPath);
+check("无 UTF-8 BOM",
+      !(buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf));
+check("无 CRLF（统一 LF）", buf.indexOf(Buffer.from("\r\n")) === -1);
 
 // ---------------------------------------------------------------------------
 // 4. 有效规则行
@@ -68,13 +75,24 @@ const rule = rules[0] || "";
 check("形如 <url-regex> url <action>", /^\^?\S+\s+url\s+\S+/.test(rule),
       rule.slice(0, 80));
 check("含 script-response-body", /script-response-body/.test(rule));
-check("含 requires-body=true", /requires-body\s*=\s*true/.test(rule),
-      "缺了 QX 不会把响应体交给脚本");
-check("含 max-size", /max-size\s*=\s*\d+/.test(rule), "大响应会被截断");
+
+// requires-body 必须写 =1（写 =true 在部分 QX 版本解析失败）
+check("requires-body=1（不是 =true）", /requires-body\s*=\s*1\b/.test(rule),
+      "当前: " + (rule.match(/requires-body\s*=\s*\w+/) || ["缺失"])[0]);
+check("没有 requires-body=true 的写法",
+      !/requires-body\s*=\s*true/.test(rule));
+
+// max-size 写 -1（不限制）；131072 在部分版本不被接受
+check("max-size=-1（不限制）", /max-size\s*=\s*-1\b/.test(rule),
+      "当前: " + (rule.match(/max-size\s*=\s*-?\d+/) || ["缺失"])[0]);
+
 check("含 tag", /tag=/.test(rule));
 check("指向 floaty_qx.js", /floaty_qx\.js/.test(rule));
 check("脚本 URL 是绝对地址", /script-response-body\s+https?:\/\//.test(rule),
       "QX 不认相对路径");
+check("脚本 URL 用固定 commit（非 @main）",
+      !/@main\//.test(rule),
+      "用 @main 会拿到 CDN 缓存的旧版");
 
 // ---------------------------------------------------------------------------
 // 5. 正则行为
