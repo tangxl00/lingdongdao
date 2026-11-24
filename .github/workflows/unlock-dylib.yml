@@ -105,6 +105,7 @@ jobs:
           set -e
           node unlock/qx/test_floaty_qx.js
           node unlock/qx/test_rewrite_regex.js
+          node unlock/qx/test_resource_conf.js
 
       # ---------------------------------------------------------------
       # 4) 用真实 Floaty IPA 端到端打补丁（从 Release 取原版 IPA）
