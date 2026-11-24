@@ -304,17 +304,43 @@ dylib 每次真的改写了响应，就会在 App 沙盒里追加一行到 `floa
 
 ---
 
+## 2.9 路线 A′：Quantumult X / Loon / Surge 重写脚本（零配置，手机上直接跑）
+
+如果你用 QX 而不是电脑代理，仓库里有一份现成的重写脚本：**`unlock/qx/`**。
+
+```
+unlock/qx/
+├── floaty_qx.js        ← 改写脚本本体（script-response-body）
+├── rewrite.conf        ← 重写规则
+├── test_floaty_qx.js   ← Node 单测（模拟 $response 环境）
+└── README.md           ← 完整配置步骤
+```
+
+QX 三步就能用：
+
+1. 设置 → HTTPS 解密 → 安装并**完全信任**证书。
+2. 重写规则加一行 MITM 域名：`hostname = api.revenuecat.com`。
+3. 订阅 → 重写 → 粘贴 `rewrite.conf` 内容，打开「重写」开关。
+
+细节（字段对照、验证方法、常见问题）见 [`unlock/qx/README.md`](qx/README.md)。
+
+> 路线 A（电脑 mitmproxy）和路线 A′（QX 脚本）改写逻辑完全一样，
+> 区别只在于代理跑在电脑还是手机上。
+
+---
+
 ## 3. 两条路线怎么选
 
-| | 路线 A（MITM） | 路线 B（dylib） |
-|---|---|---|
-| 要越狱 | ❌ | ✅ |
-| 要电脑常开 | ✅（代理要一直开着） | ❌（装完就能离线用） |
-| 改动 App 本体 | ❌ | 注入 dylib |
-| 稳定性 | 高（逻辑简单） | 中（hook 链路更复杂） |
-| 保留 App Group / Live Activity | ✅ 原版原封不动 | ✅（假签前提下） |
+| | 路线 A（MITM） | 路线 A′（QX 脚本） | 路线 B（dylib） |
+|---|---|---|---|
+| 要越狱 | ❌ | ❌ | ✅ |
+| 要电脑常开 | ✅（代理要一直开着） | ❌（手机自己跑） | ❌（装完就能离线用） |
+| 改动 App 本体 | ❌ | ❌ | 注入 dylib |
+| 稳定性 | 高（逻辑简单） | 高 | 中（hook 链路更复杂） |
+| 保留 App Group / Live Activity | ✅ 原版原封不动 | ✅ 原版原封不动 | ✅（假签前提下） |
 
-**建议先跑路线 A** —— 零风险、零改动，能立刻验证"付费墙确实是这么卡住的"。确认 Pro 解锁成功后再决定要不要做路线 B。
+**建议先跑路线 A 或 A′** —— 零风险、零改动，能立刻验证"付费墙确实是这么卡住的"。
+确认 Pro 解锁成功后再决定要不要做路线 B。
 
 ---
 
@@ -330,6 +356,11 @@ unlock/
 │   ├── test_floaty_unlock.py    ← 单元自测
 │   ├── e2e_test.py              ← 端到端测试（明文 HTTP）
 │   └── test_https_path.py       ← HTTPS 链路测试（CONNECT + TLS + 改写）
+├── qx/
+│   ├── floaty_qx.js             ← Quantumult X 重写脚本（路线 A′）
+│   ├── rewrite.conf             ← QX 重写规则
+│   ├── test_floaty_qx.js        ← QX 脚本单测（Node）
+│   └── README.md                ← QX 配置步骤
 ├── dylib/
 │   ├── FloatyUnlock.m           ← 注入式 dylib 源码
 │   └── test_rewrite.m           ← 逻辑单测（macOS 编译运行）
@@ -339,10 +370,10 @@ unlock/
 ```
 
 CI：`.github/workflows/unlock-dylib.yml` —— 在 macos-15 上编 arm64 dylib，
-并跑 **4 套测试**：ObjC 逻辑单测、补丁器单测、MITM 插件单测、
-MITM 端到端（明文 + HTTPS 链路），最后产出 dylib artifact。
+并跑 **5 套测试**：ObjC 逻辑单测、补丁器单测、MITM 插件单测、
+MITM 端到端（明文 + HTTPS 链路）、**QX 脚本单测（Node）**，最后产出 dylib artifact。
 
-最近一次成功的 run：**45321839202**（SHA `1f6791d`），artifact id `14887792124`，name `FloatyUnlock-dylib`（dylib 本体 74312 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
+最近一次成功的 run：**45323621882**（SHA `121dbe2`），artifact id `14888727565`，name `FloatyUnlock-dylib`（dylib 本体 74768 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
 
 > **务必用 CI 产出的 dylib**。本地 macOS 手工编出来的 dylib，`install_name` 默认会是 `@rpath/FloatyUnlock.dylib`，与写进 `LC_LOAD_DYLIB` 的 `@executable_path/...` 字面不一致，dyld 加载时会直接失败。CI 的 workflow 已经把 `-install_name` 固定死了。
 
