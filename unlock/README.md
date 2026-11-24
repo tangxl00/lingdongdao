@@ -151,6 +151,17 @@ com.apple.security.application-groups = [group.com.enjoyio.floaty]
 
 ### 2.5 完整流程
 
+一条命令搞定解包 → 放 dylib → 注入两个二进制 → 重打包：
+
+```bash
+python unlock/package_unlocked_ipa.py \
+  --ipa "浮现_1.1.0.ipa" \
+  --dylib FloatyUnlock.dylib \
+  --out floaty-unlocked.ipa
+```
+
+等价的手动步骤：
+
 ```bash
 # 1) 编 dylib（需要 macOS 或 CI）
 xcrun --sdk iphoneos clang \
@@ -214,6 +225,7 @@ dylib 每次真的改写了响应，就会在 App 沙盒里追加一行到 `floa
 ```
 unlock/
 ├── README.md                    ← 本文件
+├── package_unlocked_ipa.py     ← 一键打包（解包→放 dylib→注入→重打包）
 ├── mitm/
 │   ├── floaty_unlock.py         ← mitmproxy 插件（主路线）
 │   ├── fake_revenuecat.py       ← 本地假 RevenueCat 服务（测试用）
