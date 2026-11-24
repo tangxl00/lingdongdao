@@ -397,6 +397,7 @@ static void FUInstallURLProtocol(void) {
 #pragma mark - 前向声明（测试入口在 swizzle 基础设施之前定义）
 
 static void FUInstall(void);
+static IMP FUOrigIMPForInstance(id self, SEL sel);
 
 #pragma mark - 测试入口（test_rewrite.m 用）
 
