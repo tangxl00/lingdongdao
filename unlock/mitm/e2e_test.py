@@ -10,6 +10,13 @@ e2e_test.py — 端到端验证：启动真实 mitmdump + 真实 fake RevenueCat
   3. /v1/products     -> 不被改写（App 还要显示套餐列表）
   4. /v1/offerings    -> 不被改写
   5. ETag 头被剥离（因为 body 变了）
+
+注意：这里**刻意不用 urllib**。
+  * urllib 的 ProxyHandler 会读环境变量 no_proxy，本机 no_proxy 含 127.0.0.1
+    → 请求直接绕过代理，根本进不了 mitmdump；
+  * urllib 走正向代理时发的是 absolute-URI（GET http://host/path），
+    mitmdump 的 reverse 模式据此路由，路径判断会和预期不一致。
+所以改用裸 socket 手写 HTTP，与 test_https_path.py 保持同一套发包方式。
 """
 
 from __future__ import annotations
@@ -21,8 +28,6 @@ import subprocess
 import sys
 import threading
 import time
-import urllib.error
-import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -64,20 +69,43 @@ def wait_port(host: str, port: int, timeout: float = 25.0) -> bool:
     return False
 
 
-def http_get_via_proxy(url: str, host_header: str) -> tuple[int, dict, dict]:
-    """通过 mitm 代理发请求，并伪装 Host 头。"""
-    handler = urllib.request.ProxyHandler(
-        {"http": "http://127.0.0.1:%d" % PROXY_PORT, "https": "http://127.0.0.1:%d" % PROXY_PORT}
-    )
-    opener = urllib.request.build_opener(handler)
-    req = urllib.request.Request(url, headers={"Host": host_header})
+def http_get_via_proxy(path: str, host_header: str,
+                       proxy_port: int = PROXY_PORT) -> tuple[int, dict, dict]:
+    """通过 mitm 代理发一个 origin-form 请求，并伪装 Host 头。
+
+    用裸 socket 而不是 urllib：
+      - urllib 会因环境变量 no_proxy 绕过代理；
+      - urllib 走正向代理时发 absolute-URI，与 reverse 模式的路由不一致。
+    """
+    s = socket.create_connection(("127.0.0.1", proxy_port), timeout=20)
     try:
-        with opener.open(req, timeout=20) as resp:
-            body = resp.read()
-            return resp.status, json.loads(body.decode("utf-8")), dict(resp.headers)
-    except urllib.error.HTTPError as exc:
-        body = exc.read()
-        return exc.code, json.loads(body.decode("utf-8")), dict(exc.headers)
+        req = "GET %s HTTP/1.1\r\nHost: %s\r\n" % (path, host_header)
+        req += ("User-Agent: Floaty/1.1.0\r\nAccept: application/json\r\n"
+                "Connection: close\r\n\r\n")
+        s.sendall(req.encode())
+        chunks = []
+        while True:
+            b = s.recv(65536)
+            if not b:
+                break
+            chunks.append(b)
+    finally:
+        s.close()
+
+    raw = b"".join(chunks)
+    head, _, body = raw.partition(b"\r\n\r\n")
+    lines = head.decode("iso-8859-1").split("\r\n")
+    status = int(lines[0].split()[1]) if len(lines[0].split()) > 1 else 0
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            headers[k.strip().lower()] = v.strip()
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except Exception:
+        data = {}
+    return status, data, headers
 
 
 FAILED: list = []
@@ -131,11 +159,9 @@ def main() -> int:
         print("[e2e] mitmdump up on 127.0.0.1:%d" % PROXY_PORT)
         time.sleep(1.5)
 
-        base = "http://127.0.0.1:%d" % PROXY_PORT
-
         print("== 1. /v1/subscribers (新版形状) ==")
         status, data, headers = http_get_via_proxy(
-            base + "/v1/subscribers/test-user", "api.revenuecat.com"
+            "/v1/subscribers/test-user", "api.revenuecat.com"
         )
         ent = data.get("subscriber", {}).get("entitlements", {}).get("pro", {})
         check("HTTP 200", status == 200, str(status))
@@ -154,7 +180,7 @@ def main() -> int:
 
         print("== 2. /v1/customer (旧版形状) ==")
         status, data, headers = http_get_via_proxy(
-            base + "/v1/customer/test-user", "api.revenuecat.com"
+            "/v1/customer/test-user", "api.revenuecat.com"
         )
         ent = data.get("customer_info", {}).get("entitlements", {}).get("floaty_pro", {})
         check("HTTP 200", status == 200, str(status))
@@ -163,14 +189,14 @@ def main() -> int:
 
         print("== 3. /v1/products 不被改写 ==")
         status, data, headers = http_get_via_proxy(
-            base + "/v1/products", "api.revenuecat.com"
+            "/v1/products", "api.revenuecat.com"
         )
         check("HTTP 200", status == 200, str(status))
         check("产品列表原样保留", len(data.get("items", [])) == 2, json.dumps(data))
 
         print("== 4. /v1/offerings 不被改写 ==")
         status, data, headers = http_get_via_proxy(
-            base + "/v1/offerings", "api.revenuecat.com"
+            "/v1/offerings", "api.revenuecat.com"
         )
         check("HTTP 200", status == 200, str(status))
         check("offering 结构原样", data.get("current", {}).get("offering_id") == "default",
@@ -178,7 +204,7 @@ def main() -> int:
 
         print("== 5. 非 RevenueCat host 不被改写 ==")
         status, data, headers = http_get_via_proxy(
-            base + "/v1/subscribers/test-user", "example.com"
+            "/v1/subscribers/test-user", "example.com"
         )
         ent = data.get("subscriber", {}).get("entitlements", {}).get("pro", {})
         check("未授权 host 保持 is_active=False", ent.get("is_active") is False, json.dumps(ent))
