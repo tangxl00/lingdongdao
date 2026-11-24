@@ -78,8 +78,9 @@ jobs:
         run: |
           set -e
           python3 -m pip install --disable-pip-version-check --break-system-packages -q mitmproxy
-          python3 -c "import mitmproxy; print('mitmproxy', mitmproxy.__version__)"
-          command -v mitmdump || ls "$(dirname "$(python3 -c 'import sys;print(sys.executable)')")"/mitmdump
+          python3 -c "import mitmproxy, mitmproxy.version as v; print('mitmproxy', getattr(v, 'VERSION', 'unknown'))"
+          command -v mitmdump || true
+          mitmdump --version
 
       - name: Unit test (MITM plugin)
         run: |
