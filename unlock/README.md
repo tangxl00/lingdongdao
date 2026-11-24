@@ -329,18 +329,54 @@ QX 三步就能用：
 
 ---
 
-## 3. 两条路线怎么选
+## 3. 三条路线怎么选
 
-| | 路线 A（MITM） | 路线 A′（QX 脚本） | 路线 B（dylib） |
+### 3.1 先看你的设备条件
+
+```
+有越狱设备（TrollStore / ldid 可用）？
+  ├─ 是 → 路线 B（dylib）：一次装好，离线可用，最省事
+  └─ 否 → 有电脑能一直挂着？
+           ├─ 是 → 路线 A（mitmproxy）：功能等价，但要电脑常开
+           └─ 否 → 路线 A′（QX 脚本）：手机上自己跑，最推荐
+```
+
+### 3.2 对照表
+
+| | 路线 A（电脑 mitmproxy） | 路线 A′（QX 脚本） | 路线 B（dylib） |
 |---|---|---|---|
-| 要越狱 | ❌ | ❌ | ✅ |
-| 要电脑常开 | ✅（代理要一直开着） | ❌（手机自己跑） | ❌（装完就能离线用） |
+| 要越狱 | ❌ | ❌ | ✅ **必须** |
+| 要重签 | ❌ | ❌ | ✅ **必须** |
+| 要电脑常开 | ✅ 一直挂 | ❌ 手机自己跑 | ❌ |
 | 改动 App 本体 | ❌ | ❌ | 注入 dylib |
-| 稳定性 | 高（逻辑简单） | 高 | 中（hook 链路更复杂） |
-| 保留 App Group / Live Activity | ✅ 原版原封不动 | ✅ 原版原封不动 | ✅（假签前提下） |
+| 能在**普通** iPhone 上用 | ✅ | ✅ | ❌ **不行** |
+| 保留 App Group / Live Activity | ✅ | ✅ | ✅（假签前提下） |
+| 离线可用 | ❌ | ❌ | ✅ |
+| 稳定性 | 高 | 高 | 中 |
 
-**建议先跑路线 A 或 A′** —— 零风险、零改动，能立刻验证"付费墙确实是这么卡住的"。
-确认 Pro 解锁成功后再决定要不要做路线 B。
+### 3.3 关键结论：没有越狱设备就**不要**走路线 B
+
+路线 B 在普通设备上走不通，不是配置问题，是硬约束：
+
+```
+原版 entitlements:
+  application-identifier   = 9GAL39B66Y.com.enjoyio.floaty
+  team-identifier          = 9GAL39B66Y
+  application-groups       = [group.com.enjoyio.floaty]
+```
+
+`group.com.enjoyio.floaty` 绑死在开发者团队 `9GAL39B66Y` 下。用你自己的 Apple ID
+重签，这个 App Group 申请不到 → **Live Activity / 灵动岛 / 主屏小组件全部失效**，
+也就是把浮现最核心的功能废掉了。只有 TrollStore 或 ldid 的**假签**能保住原
+entitlements，而这两者都需要越狱。
+
+所以：
+
+- **普通 iPhone → 路线 A′（QX 脚本）**，这是唯一不需要任何额外设备的方案。
+- 有电脑且不介意常开 → 路线 A（mitmproxy）也行，功能与 A′ 完全等价。
+
+三条路线改写的 JSON **一模一样**（同字段、同 `2099` 日期、同样删 verification），
+只是拦截位置不同：QX 在手机本地、mitmproxy 在电脑、dylib 在 App 进程内。
 
 ---
 
