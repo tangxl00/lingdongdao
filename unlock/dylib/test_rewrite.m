@@ -148,6 +148,37 @@ int main(void) {
         check(@"completion handler 确实被回调了（链路没断）", called);
         check(@"回调带回了 error（说明请求真的发出去了）", capturedErr != nil);
 
+        printf("== 7. L0：NSURLProtocol 已注册，且 async 路径能被接管 ==\n");
+        // NSURLProtocol 是唯一覆盖 Swift async/await 的钩子
+        // （URLSession.data(for:) 是泛型扩展，不是 ObjC 方法，swizzle 够不着）
+        Class proto = NSClassFromString(@"FUURLProtocol");
+        check(@"FUURLProtocol 类存在", proto != Nil);
+        check(@"FUURLProtocol 是 NSURLProtocol 子类",
+              proto != Nil && [proto isSubclassOfClass:[NSURLProtocol class]]);
+        check(@"+canInitWithRequest: 对 RevenueCat 权益接口返回 YES",
+              proto != Nil && [proto canInitWithRequest:
+                  [NSURLRequest requestWithURL:
+                      [NSURL URLWithString:@"https://api.revenuecat.com/v1/subscribers/u1"]]] == YES);
+        check(@"+canInitWithRequest: 对 products 返回 NO（付费页套餐要能显示）",
+              proto != Nil && [proto canInitWithRequest:
+                  [NSURLRequest requestWithURL:
+                      [NSURL URLWithString:@"https://api.revenuecat.com/v1/products"]]] == NO);
+        check(@"+canInitWithRequest: 对无关域名返回 NO",
+              proto != Nil && [proto canInitWithRequest:
+                  [NSURLRequest requestWithURL:
+                      [NSURL URLWithString:@"https://example.com/v1/subscribers/u1"]]] == NO);
+
+        // configuration 的 protocolClasses 必须带上我们（这是 async 路径能生效的关键）
+        NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration defaultSessionConfiguration];
+        BOOL hasOurs = NO;
+        for (Class c in cfg.protocolClasses) {
+            if (c == proto) {
+                hasOurs = YES;
+                break;
+            }
+        }
+        check(@"NSURLSessionConfiguration.protocolClasses 已包含 FUURLProtocol", hasOurs);
+
         printf("\n");
         if (gFailed > 0) {
             printf("FAILED %d 项\n", gFailed);

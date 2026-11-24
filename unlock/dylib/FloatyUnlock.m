@@ -19,8 +19,21 @@
  *  "永久有效"，App 侧读到的就是 Pro —— App 本体一个字节都不用改，
  *  功能与布局 100% 保留。
  *
- *  四层拦截（互相兜底，任一命中即可）
+ *  五层拦截（互相兜底，任一命中即可）
  *  ----------------------------------
+ *  L0  NSURLProtocol 子类（**最外层，通吃**）
+ *      —— 这是唯一能同时覆盖下面所有情况的一层：
+ *         * Swift async/await 的 URLSession.data(for:)
+ *           （Foundation 的泛型扩展，**不是 ObjC 方法，swizzle 够不着**）
+ *         * ObjC completion handler
+ *         * ObjC delegate 回调
+ *         * 任何第三方网络库最终走的 URLSession
+ *      原理：把 FUURLProtocol 注册进 NSURLProtocol，
+ *           再由它接管 RevenueCat 的请求（内部用一条不挂本协议的 session
+ *           重新发一次），拿到完整响应体后改写再回放给调用方。
+ *      **为什么必须有这一层**：RevenueCat 5.x 是 Swift SDK，内部可能走
+ *      async 路径；只靠 L1-L4 有整层落空的风险（症状：App 正常、但付费墙
+ *      没解、floaty_unlock_hits.txt 是空的）。
  *  L1  swizzle -[NSURLSession dataTaskWithRequest:completionHandler:]
  *  L2  swizzle -[NSURLSession dataTaskWithURL:completionHandler:]
  *      -> 包一层 completion handler，拿到完整 data 时就地改写
@@ -192,10 +205,198 @@ static NSData *FURewriteIfNeeded(NSURL *url, NSData *data) {
     return FURewriteBody(data);
 }
 
+#pragma mark - L0：NSURLProtocol（覆盖 Swift async/await，最外层兜底）
+
+/*  L0 用到的后面才定义的函数，先声明 */
+static void FUSwizzle(Class cls, SEL sel, IMP replacement);
+static IMP FUFindRealIMP(Class cls, SEL sel, IMP replacement);
+static void FUMarkHit(NSString *tag);
+
+/*
+ * 为什么必须有这一层
+ * ------------------
+ * RevenueCat 5.x 是 Swift SDK。Swift 有两条完全独立的取数路径：
+ *
+ *   ① ObjC 路径  -[NSURLSession dataTaskWithRequest:completionHandler:]
+ *                URLSession:dataTask:didReceiveData:  （delegate）
+ *                → L1-L4 能拦
+ *
+ *   ② Swift async 路径   try await URLSession.shared.data(for: request)
+ *                → 这是 Foundation 对 NSURLSession 的 **泛型扩展**，
+ *                  编译后是 Swift 函数，**没有对应的 ObjC 方法**，
+ *                  method swizzling 完全够不着 → L1-L4 全部落空
+ *
+ * 静态分析拿不到结论：__objc_methname / __text 都在 FairPlay 加密区内
+ * （0x4000-0xFB8000），`dataTaskWithRequest` 等字符串明文 0 命中。
+ * 但二进制里 swift_task_create / withCheckedContinuation / AsyncBytes
+ * 全部存在 → async 路径确实被用到。
+ *
+ * NSURLProtocol 是 URL Loading System 的**最底层可插拔钩子**：
+ * 无论上层是 async、completion handler、delegate 还是第三方库，
+ * 请求最终都会经过已注册的 NSURLProtocol 子类。所以它能通吃。
+ */
+
+static NSString *const kFUHandledKey = @"FloatyUnlockHandled";
+
+/// 内部用的 session（不能再挂本协议，否则无限递归）
+static NSURLSession *FUInnerSession(void) {
+    static NSURLSession *session = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+        // 关键：把我们的协议类从 protocolClasses 里剔除。
+        // 如果 swizzle 已经全局注入过，这里要显式清掉。
+        NSMutableArray *classes = [NSMutableArray array];
+        for (Class c in cfg.protocolClasses) {
+            if (c != NSClassFromString(@"FUURLProtocol")) {
+                [classes addObject:c];
+            }
+        }
+        cfg.protocolClasses = classes;
+        session = [NSURLSession sessionWithConfiguration:cfg];
+    });
+    return session;
+}
+
+@interface FUURLProtocol : NSURLProtocol
+@end
+
+@implementation FUURLProtocol
+
++ (BOOL)canInitWithRequest:(NSURLRequest *)request {
+    // 已经处理过的（我们内部重发的那一次）不再进入，防递归
+    if ([NSURLProtocol propertyForKey:kFUHandledKey inRequest:request] != nil) {
+        return NO;
+    }
+    // 只接管 RevenueCat 的权益接口，其余流量完全不碰
+    return FUShouldRewriteURL(request.URL);
+}
+
++ (NSURLRequest *)canonicalRequestForRequest:(NSURLRequest *)request {
+    return request;
+}
+
+- (void)startLoading {
+    NSMutableURLRequest *inner = [self.request mutableCopy];
+    [NSURLProtocol setProperty:@YES forKey:kFUHandledKey inRequest:inner];
+
+    NSURLSessionDataTask *task = [FUInnerSession() dataTaskWithRequest:inner
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            if (error != nil) {
+                [self.client URLProtocol:self didFailWithError:error];
+                return;
+            }
+            NSData *body = data;
+            NSData *rewritten = (data.length > 0)
+                ? FURewriteIfNeeded(response.URL ?: inner.URL, data)
+                : nil;
+            if (rewritten != nil) {
+                body = rewritten;
+                FUMarkHit(@"urlprotocol");
+            }
+
+            // 改写后 Content-Length 必须跟着变，否则上层会截断/卡住
+            NSURLResponse *out = response;
+            if (rewritten != nil && [response isKindOfClass:[NSHTTPURLResponse class]]) {
+                NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+                NSMutableDictionary *headers = [http.allHeaderFields mutableCopy];
+                [headers removeObjectForKey:@"Content-Length"];
+                [headers removeObjectForKey:@"content-length"];
+                [headers removeObjectForKey:@"ETag"];
+                [headers removeObjectForKey:@"etag"];
+                headers[@"Content-Length"] = [NSString stringWithFormat:@"%lu",
+                                              (unsigned long)body.length];
+                out = [[NSHTTPURLResponse alloc] initWithURL:http.URL
+                                                  statusCode:http.statusCode
+                                                 HTTPVersion:@"HTTP/1.1"
+                                                headerFields:headers];
+            }
+
+            [self.client URLProtocol:self
+                  didReceiveResponse:out
+                  cacheStoragePolicy:NSURLCacheStorageNotAllowed];
+            if (body.length > 0) {
+                [self.client URLProtocol:self didLoadData:body];
+            }
+            [self.client URLProtocolDidFinishLoading:self];
+        }];
+    objc_setAssociatedObject(self, @selector(startLoading), task, OBJC_ASSOCIATION_RETAIN);
+    [task resume];
+}
+
+- (void)stopLoading {
+    NSURLSessionDataTask *task = objc_getAssociatedObject(self, @selector(startLoading));
+    [task cancel];
+}
+
+@end
+
+/// 保证「每个 NSURLSessionConfiguration 都带上 FUURLProtocol」
+///
+/// 为什么不能只靠 [NSURLProtocol registerClass:]：
+///   registerClass: 只对 NSURLConnection 可靠；NSURLSession 需要在
+///   configuration.protocolClasses 里显式挂上才会生效（包括 URLSession.shared
+///   —— 它也是从一份 configuration 建出来的）。
+///
+/// 递归安全性：这里**不用查表找回原 IMP**，而是在安装时把原始 IMP 抓一次
+/// 存进 gOrigProtocolClassesGetter，swizzle 后直接调用它。
+/// 这样不存在「swizzled 实现 → 查表 → 拿到自己 → 无限递归」的可能，
+/// 也就不需要在递归时返回 @[]（那会让 Foundation 以为没有任何协议类，
+/// 反而可能把 App 的网络搞坏）。
+static IMP gOrigProtocolClassesGetter = NULL;
+
+static NSArray *FUProtocolClassesGetter(id self, SEL _cmd) {
+    NSArray *original = nil;
+    if (gOrigProtocolClassesGetter != NULL) {
+        typedef NSArray *(*Orig)(id, SEL);
+        original = ((Orig)gOrigProtocolClassesGetter)(self, _cmd);
+    }
+
+    Class ours = NSClassFromString(@"FUURLProtocol");
+    if (ours == Nil) {
+        return original ?: @[];
+    }
+    if (original == nil) {
+        return @[ours];
+    }
+    for (Class c in original) {
+        if (c == ours) {
+            return original;   // 已经在里面了，幂等
+        }
+    }
+    NSMutableArray *merged = [NSMutableArray arrayWithObject:ours];
+    [merged addObjectsFromArray:original];
+    return merged;
+}
+
+/// 注册 L0（幂等）
+static void FUInstallURLProtocol(void) {
+    Class proto = NSClassFromString(@"FUURLProtocol");
+    if (proto == Nil) {
+        return;
+    }
+    // 1) 全局注册（对 NSURLConnection 生效）
+    [NSURLProtocol registerClass:proto];
+
+    // 2) 让每个 session configuration 的 protocolClasses 都带上我们
+    //    （这一步才真正覆盖 NSURLSession，含 URLSession.shared 与 Swift async）
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        if (gOrigProtocolClassesGetter == NULL) {
+            gOrigProtocolClassesGetter = FUFindRealIMP(
+                [NSURLSessionConfiguration class],
+                @selector(protocolClasses),
+                (IMP)FUProtocolClassesGetter);
+        }
+        FUSwizzle([NSURLSessionConfiguration class],
+                  @selector(protocolClasses),
+                  (IMP)FUProtocolClassesGetter);
+    });
+}
+
 #pragma mark - 前向声明（测试入口在 swizzle 基础设施之前定义）
 
 static void FUInstall(void);
-static IMP FUOrigIMPForInstance(id self, SEL sel);
 
 #pragma mark - 测试入口（test_rewrite.m 用）
 
@@ -240,8 +441,6 @@ static void FUMarkHit(NSString *tag) {
 }
 
 #pragma mark - swizzle 基础设施
-
-static void FUInstall(void);
 
 /// 原 IMP 登记表：key = "<class ptr>|<selector>"，value = IMP
 static NSMutableDictionary *FUOrigIMPs(void) {
@@ -514,6 +713,9 @@ static void FUCompleteWithError(id self, SEL _cmd, NSURLSession *session,
 #pragma mark - 安装
 
 static void FUInstall(void) {
+    // L0 —— 最先装：NSURLProtocol 通吃层（含 Swift async 路径）
+    FUInstallURLProtocol();
+
     // L1 / L2 —— NSURLSession 的 completion handler 型
     //
     // 先把「真正的原始 IMP」抓一次存到全局，后面 swizzle 后的调用直接用它，
