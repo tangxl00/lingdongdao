@@ -72,7 +72,15 @@ jobs:
 
       # ---------------------------------------------------------------
       # 3b) MITM 插件单测 + 端到端 + HTTPS 链路
+      #     需要 mitmproxy，先装到 runner 的 python 里
       # ---------------------------------------------------------------
+      - name: Install mitmproxy
+        run: |
+          set -e
+          python3 -m pip install --disable-pip-version-check --break-system-packages -q mitmproxy
+          python3 -c "import mitmproxy; print('mitmproxy', mitmproxy.__version__)"
+          command -v mitmdump || ls "$(dirname "$(python3 -c 'import sys;print(sys.executable)')")"/mitmdump
+
       - name: Unit test (MITM plugin)
         run: |
           set -e

@@ -36,17 +36,23 @@ PLUGIN = os.path.join(HERE, "floaty_unlock.py")
 FAKE_RC = os.path.join(HERE, "fake_revenuecat.py")
 
 MITMDUMP = None
-for cand in (
-    os.path.join(sys.executable, "..", "Scripts", "mitmdump.exe"),
-    "mitmdump",
-):
-    if cand == "mitmdump":
-        MITMDUMP = cand
-        break
-    p = os.path.abspath(cand)
-    if os.path.exists(p):
-        MITMDUMP = p
-        break
+
+
+def find_mitmdump():
+    """按优先级找 mitmdump：PATH → venv/Scripts → venv/bin。"""
+    import shutil
+    cand = shutil.which("mitmdump")
+    if cand:
+        return cand
+    exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+    for sub in ("Scripts", "bin"):
+        p = os.path.join(exe_dir, sub, "mitmdump.exe" if sub == "Scripts" else "mitmdump")
+        if os.path.exists(p):
+            return p
+        p2 = os.path.join(exe_dir, sub, "mitmdump")
+        if os.path.exists(p2):
+            return p2
+    return None
 
 RC_HOST = "api.revenuecat.com"
 
@@ -188,6 +194,7 @@ def assert_unlocked(body, hdrs, label):
 
 def main():
     keep = "--keep" in sys.argv
+    MITMDUMP = find_mitmdump()
     if not MITMDUMP:
         print("SKIP：找不到 mitmdump，无法运行本测试")
         return 0
