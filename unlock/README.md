@@ -164,9 +164,10 @@ python unlock/package_unlocked_ipa.py \
 
 ```bash
 # 1) 编 dylib（需要 macOS 或 CI）
+#    install_name 必须与注入的 LC_LOAD_DYLIB 路径完全一致
 xcrun --sdk iphoneos clang \
   -arch arm64 -miphoneos-version-min=17.0 -fobjc-arc -O2 \
-  -dynamiclib -install_name @rpath/FloatyUnlock.dylib \
+  -dynamiclib -install_name '@executable_path/Frameworks/FloatyUnlock.dylib' \
   -framework Foundation \
   -o FloatyUnlock.dylib unlock/dylib/FloatyUnlock.m
 
@@ -174,16 +175,23 @@ xcrun --sdk iphoneos clang \
 unzip floaty.ipa -d unpacked
 APP=unpacked/Payload/floaty.app
 
-# 3) 给主二进制和扩展都注入 dylib 依赖
+# 3) 先把 dylib 放进 Frameworks/
+#    主 App 和每个 appex 都要放一份 —— @executable_path 是按各自的可执行文件解析的
+mkdir -p "$APP/Frameworks"
+cp FloatyUnlock.dylib "$APP/Frameworks/"
+for P in "$APP"/PlugIns/*.appex; do
+  mkdir -p "$P/Frameworks"
+  cp FloatyUnlock.dylib "$P/Frameworks/"
+done
+
+# 4) 给主二进制和扩展都注入 dylib 依赖
+#    （补丁器会自动跳过已经放进去的 FloatyUnlock.dylib 自身）
 python unlock/patcher/floaty_patcher.py \
   --bundle "$APP" \
   --dylib-path '@executable_path/Frameworks/FloatyUnlock.dylib' \
   --out unpacked/patched
 
-# 4) 把 dylib 放进 Frameworks/
-mkdir -p unpacked/patched/Frameworks
-cp FloatyUnlock.dylib unpacked/patched/Frameworks/
-
+```bash
 # 5) 假签（越狱设备，保留原 entitlements）
 #    ldid -S<原 entitlements> 主二进制 与 appex
 #    或用 TrollStore 直接装改过的 IPA（它会自己假签）
@@ -192,7 +200,11 @@ cp FloatyUnlock.dylib unpacked/patched/Frameworks/
 cd unpacked && zip -qry floaty-unlocked.ipa Payload
 ```
 
-> **注意**：原版二进制里**没有任何 `LC_RPATH`**。`@executable_path/Frameworks/FloatyUnlock.dylib` 走的是 dyld 对 `@executable_path` 的内置解析，不依赖 rpath，所以不需要额外补 `LC_RPATH`。
+> **注意 1**：原版二进制里**没有任何 `LC_RPATH`**。`@executable_path/Frameworks/FloatyUnlock.dylib` 走的是 dyld 对 `@executable_path` 的内置解析，不依赖 rpath，所以不需要额外补 `LC_RPATH`。
+>
+> **注意 2**：dylib 的 `install_name` 与写进 `LC_LOAD_DYLIB` 的路径**必须字面一致**，否则 dyld 加载时会因为路径不匹配而失败。CI 里已经统一成 `@executable_path/Frameworks/FloatyUnlock.dylib`。
+>
+> **注意 3**：`--out unpacked/patched` 是补丁器输出目录；dylib 是在**第 3 步**放进原 `Frameworks/` 的，补丁器会把这整个 bundle 复制到 `--out`，所以两份 dylib 都会跟着过去。
 
 ### 2.6 怎么确认 dylib 生效
 
@@ -240,6 +252,25 @@ unlock/
 ```
 
 CI：`.github/workflows/unlock-dylib.yml` —— 在 macos-15 上编 arm64 dylib + 跑两套单测 + 产出 dylib artifact。
+
+最近一次成功的 run：**45320854541**（SHA `2f5d610`），artifact `FloatyUnlock-dylib`（dylib 本体 74312 字节，`install_name = @executable_path/Frameworks/FloatyUnlock.dylib`）。CI 里「Patch real Floaty IPA (end-to-end)」这一步需要仓库变量 `FLOATY_IPA_URL` 指向原版 IPA 的下载地址；不配这个变量该步会跳过，其余步骤照跑。
+
+---
+
+## 4.1 已验证的产物
+
+`unlock/package_unlocked_ipa.py` 在真实原版 IPA 上跑通，产物：
+
+```
+Payload/floaty.app/Frameworks/FloatyUnlock.dylib                      74312
+Payload/floaty.app/PlugIns/floatyLiveActivity.appex/Frameworks/
+    FloatyUnlock.dylib                                                 74312
+Payload/floaty.app/floaty                          injected=True  cryptid=1
+Payload/floaty.app/PlugIns/floatyLiveActivity.appex/floatyLiveActivity
+                                                       injected=True  cryptid=1
+```
+
+`cryptid` 保持 1 意味着 **FairPlay 加密段一个字节都没动**，App 仍然是官方加密版本、不会因为改了文件而崩溃。
 
 ---
 
