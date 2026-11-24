@@ -1,0 +1,114 @@
+name: Floaty Unlock (dylib + patcher)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'unlock/**'
+      - '.github/workflows/unlock-dylib.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build arm64 dylib & run tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          for DEV in \
+            /Applications/Xcode_16.4.app/Contents/Developer \
+            /Applications/Xcode_16.3.app/Contents/Developer \
+            /Applications/Xcode_16.2.app/Contents/Developer \
+            /Applications/Xcode_16.app/Contents/Developer \
+            /Applications/Xcode.app/Contents/Developer ; do
+            if [ -d "$DEV" ]; then
+              sudo xcode-select -s "$DEV" && break
+            fi
+          done
+          xcodebuild -version
+
+      # ---------------------------------------------------------------
+      # 1) 编译 arm64 iOS dylib（注入用）
+      # ---------------------------------------------------------------
+      - name: Build FloatyUnlock.dylib (arm64, iOS 17.0+)
+        run: |
+          set -e
+          mkdir -p build
+          xcrun --sdk iphoneos clang \
+            -arch arm64 \
+            -miphoneos-version-min=17.0 \
+            -fobjc-arc \
+            -O2 \
+            -dynamiclib \
+            -install_name @rpath/FloatyUnlock.dylib \
+            -framework Foundation \
+            -o build/FloatyUnlock.dylib \
+            unlock/dylib/FloatyUnlock.m
+          echo "### built:" >> "$GITHUB_STEP_SUMMARY"
+          ls -lh build/FloatyUnlock.dylib >> "$GITHUB_STEP_SUMMARY"
+          file build/FloatyUnlock.dylib
+
+      # ---------------------------------------------------------------
+      # 2) 跑 Objective-C 逻辑单测（macOS 宿主编译）
+      # ---------------------------------------------------------------
+      - name: Unit test (JSON rewrite logic)
+        run: |
+          set -e
+          clang -fobjc-arc -framework Foundation \
+            unlock/dylib/FloatyUnlock.m unlock/dylib/test_rewrite.m \
+            -o build/test_rewrite
+          ./build/test_rewrite
+
+      # ---------------------------------------------------------------
+      # 3) 跑 Python 补丁器单测
+      # ---------------------------------------------------------------
+      - name: Unit test (Mach-O patcher)
+        run: |
+          set -e
+          python3 unlock/patcher/test_floaty_patcher.py
+
+      # ---------------------------------------------------------------
+      # 4) 用真实 Floaty IPA 端到端打补丁（从 Release 取原版 IPA）
+      # ---------------------------------------------------------------
+      - name: Patch real Floaty IPA (end-to-end)
+        env:
+          FLOATY_IPA_URL: ${{ vars.FLOATY_IPA_URL }}
+        run: |
+          set -e
+          mkdir -p e2e
+          if [ -z "$FLOATY_IPA_URL" ]; then
+            echo "FLOATY_IPA_URL 未配置，跳过真实 IPA 端到端（补丁器单测已覆盖核心逻辑）"
+            exit 0
+          fi
+          curl -fsSL "$FLOATY_IPA_URL" -o e2e/floaty.ipa
+          cd e2e
+          unzip -q floaty.ipa -d unpacked
+          APP=$(find unpacked/Payload -maxdepth 1 -name '*.app' | head -1)
+          echo "app = $APP"
+          python3 ../unlock/patcher/floaty_patcher.py \
+            --bundle "$APP" \
+            --dylib-path '@executable_path/Frameworks/FloatyUnlock.dylib' \
+            --out unpacked/patched
+          # 校验：主二进制与 appex 都应带上 dylib 依赖
+          python3 - <<'PY'
+          import os, sys
+          sys.path.insert(0, os.path.join('..', 'unlock', 'patcher'))
+          from floaty_patcher import find_macho_files, MachO
+          want = '@executable_path/Frameworks/FloatyUnlock.dylib'
+          bad = 0
+          for b in find_macho_files('unpacked/patched'):
+              m = MachO(open(b, 'rb').read())
+              ok = want in m.dylibs
+              print('%-60s %s' % (os.path.relpath(b, 'unpacked/patched'), 'OK' if ok else 'MISSING'))
+              if not ok: bad += 1
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Upload FloatyUnlock.dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: FloatyUnlock-dylib
+          path: build/FloatyUnlock.dylib
